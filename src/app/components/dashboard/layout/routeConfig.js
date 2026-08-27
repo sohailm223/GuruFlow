@@ -15,6 +15,9 @@ export const ROUTE_CONFIG = {
   credentials: {
     label: 'Credentials',
   },
+  incidents: {
+    label: 'Black Box',
+  },
 };
 
 /* Fallback for dynamic routes like [slug], [id] */

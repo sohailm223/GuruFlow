@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { fetchHygraph } from "@/lib/hygraph";
 
+export const dynamic = "force-dynamic";
+
 export default async function ProjectsPage() {
   const data = await fetchHygraph(`
     query {

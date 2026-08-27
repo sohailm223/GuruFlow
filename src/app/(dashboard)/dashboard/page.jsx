@@ -2,6 +2,8 @@ import { GraphQLClient, gql } from "graphql-request";
 
 import DashboardClient from "./DashboardClient";
 
+export const dynamic = "force-dynamic";
+
 // --------------------
 // Hygraph Client
 // --------------------

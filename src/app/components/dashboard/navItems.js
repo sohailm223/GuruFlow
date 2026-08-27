@@ -2,7 +2,8 @@ import {
   LayoutDashboard,
   FolderKanban,
   Users,
-  KeyRound
+  KeyRound,
+  Video
 } from 'lucide-react';
 
 export const navItems = [
@@ -25,5 +26,10 @@ export const navItems = [
     label: 'Credentials',
     href: '/credentials',
     icon: KeyRound,
+  },
+  {
+    label: 'Black Box',
+    href: '/incidents',
+    icon: Video,
   },
 ];

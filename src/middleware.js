@@ -10,6 +10,7 @@ export default clerkMiddleware({
     "/about",
     "/onboarding/invite(.*)",
     "/api/webhook/clerk",       // keep this public for Clerk webhooks
+    "/api/blackbox/(.*)",       // collector webhook; HMAC-signed when BLACKBOX_INGEST_SECRET is set
   ],
 });
 
