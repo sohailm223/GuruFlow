@@ -1,69 +1,36 @@
-import crypto from "crypto";
-import { NextResponse } from "next/server";
-import { ingestEvents } from "@/lib/incidents/ingest";
+import { json, fail, readJson } from "../_lib";
+import { authenticateCollector } from "@/lib/blackbox/auth";
+import { ingestEvents } from "@/lib/blackbox/ingest";
 
 export const runtime = "nodejs";
 
 /**
  * POST /api/blackbox/ingest
  *
- * Body: { site: "https://example.com", events: [ ...BlackBoxEvent ] }
+ * Auth: X-ScanSite-Site + X-ScanSite-Key (never credentials in the query
+ * string). Optionally X-ScanSite-Timestamp + X-ScanSite-Signature when the
+ * collector signs requests.
  *
- * Auth: if BLACKBOX_INGEST_SECRET is set, the request must carry
- *       x-blackbox-signature: sha256=<HMAC-SHA256 of the raw body>.
- *       Public otherwise (dev convenience).
+ * Body: { site, events: [ …up to 100 ] }
  */
 export async function POST(req) {
-  const raw = await req.text();
+  const { ok: parsed, body, raw, error } = await readJson(req);
+  if (!parsed) return fail(400, error);
 
-  const authError = verifySignature(raw, req.headers.get("x-blackbox-signature"));
-  if (authError) {
-    return NextResponse.json({ error: authError }, { status: 401 });
-  }
+  const auth = await authenticateCollector(req, raw);
+  if (!auth.ok) return fail(auth.status, auth.error);
 
-  let payload;
-  try {
-    payload = JSON.parse(raw);
-  } catch {
-    return NextResponse.json({ error: "body must be valid JSON" }, { status: 400 });
-  }
-
-  const result = await ingestEvents(payload);
+  const result = await ingestEvents(auth.site.id, body);
   if (!result.ok) {
-    return NextResponse.json({ error: result.error, rejected: result.rejected }, { status: 400 });
+    return fail(result.status, result.error, { rejected: result.rejected });
   }
 
-  return NextResponse.json({
+  return json({
     success: true,
-    site: result.site,
+    siteId: auth.site.id,
     accepted: result.accepted,
+    duplicates: result.duplicates,
     rejected: result.rejected,
-    incidents: result.incidents.map((i) => ({
-      id: i.id,
-      startedAt: i.startedAt,
-      endedAt: i.endedAt,
-      eventCount: i.eventCount,
-      risk: i.risk,
-      headline: i.headline,
-      likelyCause: i.likelyCause,
-    })),
+    incidents: result.incidents,
   });
-}
-
-function verifySignature(rawBody, header) {
-  const secret = process.env.BLACKBOX_INGEST_SECRET;
-  if (!secret) return null; // signature checking disabled
-  if (!header) return "missing x-blackbox-signature header";
-
-  const expected = `sha256=${crypto
-    .createHmac("sha256", secret)
-    .update(rawBody)
-    .digest("hex")}`;
-
-  const a = Buffer.from(expected);
-  const b = Buffer.from(header);
-  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
-    return "invalid signature";
-  }
-  return null;
 }

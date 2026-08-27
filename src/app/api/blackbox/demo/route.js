@@ -1,53 +1,34 @@
-import { NextResponse } from "next/server";
-import { ingestEvents } from "@/lib/incidents/ingest";
-import { DEMO_SITE, buildDemoEvents } from "@/lib/incidents/demoScenario";
+import { json } from "../_lib";
+import { generateDemoData } from "@/lib/blackbox/demo";
+import { getIncidentsBySite } from "@/lib/blackbox/storage";
+import { publicIncidentSummary } from "@/lib/blackbox/ingest";
 
 export const runtime = "nodejs";
 
 /**
  * GET|POST /api/blackbox/demo
  *
- * Loads the reference compromise scenario so the timeline can be reviewed
- * without a live WordPress collector attached. GET is supported so the
- * correlation output can be inspected straight from a browser.
+ * Creates the demo websites (namespaced site_demo_…) and pushes their events
+ * through the real ingest pipeline. Demo data never touches connected sites.
  *
- * Public by design (see middleware publicRoutes); it writes only demo data
- * for DEMO_SITE.
+ * GET is supported so the flow can be exercised straight from a browser.
  */
-async function runDemo(req) {
-  let site = DEMO_SITE;
+async function run() {
+  const result = await generateDemoData();
 
-  const raw = await req.text();
-  if (raw) {
-    try {
-      const body = JSON.parse(raw);
-      if (typeof body?.site === "string" && body.site.trim()) site = body.site.trim();
-    } catch {
-      return NextResponse.json({ error: "body must be valid JSON or empty" }, { status: 400 });
+  const incidents = [];
+  for (const siteId of result.sites) {
+    for (const incident of await getIncidentsBySite(siteId, 20)) {
+      incidents.push(publicIncidentSummary(incident));
     }
   }
 
-  const result = await ingestEvents({ site, events: buildDemoEvents() });
-  if (!result.ok) {
-    return NextResponse.json({ error: result.error }, { status: 500 });
-  }
-
-  return NextResponse.json({
+  return json({
     success: true,
-    site: result.site,
-    accepted: result.accepted,
-    incidents: result.incidents.map((i) => ({
-      id: i.id,
-      startedAt: i.startedAt,
-      endedAt: i.endedAt,
-      eventCount: i.eventCount,
-      risk: i.risk,
-      score: i.score,
-      headline: i.headline,
-      likelyCause: i.likelyCause,
-    })),
+    sites: result.sites,
+    incidents: incidents.sort((a, b) => b.startedAt - a.startedAt),
   });
 }
 
-export const GET = runDemo;
-export const POST = runDemo;
+export const GET = run;
+export const POST = run;
