@@ -11,10 +11,14 @@ import { runHookTests } from './t-hooks.mjs';
 import { runUpgraderTests } from './t-upgrader.mjs';
 import { runCollectorTests } from './t-collector.mjs';
 import { runScenario } from './t-scenario.mjs';
-import { summary, saveResults, phpRun, results } from './harness.mjs';
+import { summary, saveResults, phpRun, results, pruneLabSites } from './harness.mjs';
 import { readFileSync } from 'node:fs';
 
 const php = await boot();
+
+// Start from a clean dashboard: drop the lab site left behind by the last run.
+const pruned = await pruneLabSites();
+if (pruned) console.log(`Removed ${pruned} stale lab website(s) from earlier runs.`);
 
 // Record the real environment the matrix was produced under, rather than
 // asserting it from memory.

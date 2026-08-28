@@ -1,9 +1,9 @@
 {
-  "eventId": "evt_67b31eb9794eb339",
+  "eventId": "evt_5a674016fffe6d4f",
   "siteId": "site_example000000",
   "category": "user",
   "type": "administrator_created",
-  "timestamp": 1787913864000,
+  "timestamp": 1787914678000,
   "severityHint": null,
   "actor": {
     "userId": 1,
@@ -13,16 +13,16 @@
   },
   "target": {
     "username": "example_user",
-    "userId": 21,
+    "userId": 26,
     "role": "administrator"
   },
   "changes": {
     "to": "administrator"
   },
   "metadata": [],
-  "receivedAt": 1787913864383,
+  "receivedAt": 1787914678230,
   "incident": {
-    "id": "inc_ca2f83dbe329",
+    "id": "inc_31079e20b7a3",
     "title": "Backdoor planted after privilege escalation",
     "severity": "critical",
     "riskScore": 100,

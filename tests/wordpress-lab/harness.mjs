@@ -127,9 +127,30 @@ export const api = {
   disconnect: (id) => call('POST', `/api/blackbox/sites/${id}/disconnect`),
   verifySite: (id) => call('POST', `/api/blackbox/sites/${id}/verify`),
   events: (id) => call('GET', `/api/blackbox/events?site=${id}&limit=500`),
-  incidents: (id) => call('GET', `/api/blackbox/incidents?siteId=${id}`),
+  // The API filters on ?site=; ?siteId= is silently ignored and would return
+  // every incident in the store, which makes site-scoped assertions vacuous.
+  incidents: (id) => call('GET', `/api/blackbox/incidents?site=${id}`),
   incident: (id) => call('GET', `/api/blackbox/incidents/${id}`),
+  deleteSite: (id) => call('DELETE', `/api/blackbox/sites/${id}?purge=true`),
 };
+
+/**
+ * Remove leftover lab websites from previous runs.
+ *
+ * Each run pairs a fresh collector, so without this the dashboard accumulates
+ * another "ScanSite WP Lab" entry every time.
+ */
+export async function pruneLabSites(name = 'ScanSite WP Lab') {
+  const list = await api.health();
+  const sites = list.body?.sites ?? [];
+  let removed = 0;
+  for (const site of sites) {
+    if (site.name !== name) continue;
+    const res = await api.deleteSite(site.id);
+    if (res.status === 200) removed++;
+  }
+  return removed;
+}
 
 /** Fail loudly if ScanSite is not running — every test depends on it. */
 export async function requireScanSite() {

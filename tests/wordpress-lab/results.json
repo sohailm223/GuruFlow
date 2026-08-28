@@ -17,7 +17,7 @@
     {
       "name": "Pairing code accepted by ScanSite",
       "pass": true,
-      "detail": "siteId=site_2ce9c4"
+      "detail": "siteId=site_b0e79d"
     },
     {
       "name": "Collector key stored in WordPress",
@@ -47,12 +47,12 @@
     {
       "name": "Connection screen renders",
       "pass": true,
-      "detail": "8395 bytes of HTML"
+      "detail": "8396 bytes of HTML"
     },
     {
       "name": "Heartbeat reaches ScanSite",
       "pass": true,
-      "detail": "lastSeenAt 1787913771720 -> 1787913772526"
+      "detail": "lastSeenAt 1787914588626 -> 1787914589339"
     },
     {
       "name": "Heartbeat reports real versions",
@@ -165,7 +165,7 @@
       "detected": "Yes",
       "payloadCorrect": "Yes",
       "duplicates": "No",
-      "notes": "username=test_admin role=administrator userId=18"
+      "notes": "username=test_admin role=administrator userId=23"
     },
     {
       "event": "logout",
@@ -213,7 +213,7 @@
       "detected": "Yes",
       "payloadCorrect": "Yes",
       "duplicates": "No",
-      "notes": "hook=lab_test_hook schedule=hourly nextRun=2026-08-28T11:43:00+00:00"
+      "notes": "hook=lab_test_hook schedule=hourly nextRun=2026-08-28T11:56:37+00:00"
     },
     {
       "event": "cron_removed",
@@ -229,7 +229,7 @@
       "detected": "Yes",
       "payloadCorrect": "Yes",
       "duplicates": "No",
-      "notes": "path=/.htaccess sha256=e605755811d4… contents sent=no"
+      "notes": "path=/.htaccess sha256=316d41e2c3bb… contents sent=no"
     },
     {
       "event": "wp_config_modified",
@@ -237,7 +237,7 @@
       "detected": "Yes",
       "payloadCorrect": "Yes",
       "duplicates": "No",
-      "notes": "sha256=73b8a1cabfe6… secrets sent=no"
+      "notes": "sha256=9d3c3fb9601b… secrets sent=no"
     },
     {
       "event": "executable_created",
@@ -452,12 +452,12 @@
     {
       "name": "Event capture is local and fast (no network)",
       "pass": true,
-      "detail": "3 ms to enqueue"
+      "detail": "2 ms to enqueue"
     },
     {
       "name": "admin_init file hashing stays cheap",
       "pass": true,
-      "detail": "96 ms"
+      "detail": "88 ms"
     },
     {
       "name": "No secret-like keys or values in real payloads",
@@ -477,12 +477,12 @@
     {
       "name": "Timestamps are ISO 8601 UTC",
       "pass": true,
-      "detail": "2026-08-28T10:44:22+00:00"
+      "detail": "2026-08-28T10:57:56+00:00"
     },
     {
       "name": "Server stores UTC (offset +00:00)",
       "pass": true,
-      "detail": "2026-08-28T10:44:22+00:00"
+      "detail": "2026-08-28T10:57:56+00:00"
     },
     {
       "name": "eventId is unique",
@@ -564,19 +564,19 @@
   "performance": [
     {
       "name": "wp_insert_user with collector active",
-      "ms": 137
+      "ms": 135
     },
     {
       "name": "admin_init (config + uploads hashing)",
-      "ms": 96
+      "ms": 88
     },
     {
       "name": "update_option with collector active",
-      "ms": 4
+      "ms": 3
     },
     {
       "name": "enqueue one event (no network)",
-      "ms": 3
+      "ms": 2
     }
   ],
   "bugs": [],
