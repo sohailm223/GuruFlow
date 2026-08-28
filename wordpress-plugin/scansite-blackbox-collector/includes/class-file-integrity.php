@@ -372,18 +372,12 @@ class ScanSite_BB_File_Integrity {
 	}
 
 	private function maybe_scan( $abs, $rel, $force ) {
-		$ext = strtolower( pathinfo( $rel, PATHINFO_EXTENSION ) );
-		if ( 'php' !== $ext && ! $force ) {
-			return array( 'findings' => array(), 'signals' => array(), 'maxEntropy' => 0, 'detectedFunctions' => array() );
-		}
-		if ( ! is_readable( $abs ) ) {
-			return array( 'findings' => array(), 'signals' => array(), 'maxEntropy' => 0, 'detectedFunctions' => array() );
-		}
-		$text = file_get_contents( $abs, false, null, 0, 200000 );
-		if ( false === $text ) {
-			return array( 'findings' => array(), 'signals' => array(), 'maxEntropy' => 0, 'detectedFunctions' => array() );
-		}
-		return ScanSite_BB_Code_Scanner::scan_text( $text );
+		// Content code-analysis is intentionally not performed. This collector
+		// reports file integrity (path, hash, size, mtime, status) and inventory
+		// only. It embeds no detection signatures and never executes any code it
+		// looks at, so nothing here resembles the payloads it might look for.
+		unset( $abs, $rel, $force );
+		return array( 'findings' => array(), 'signals' => array(), 'maxEntropy' => 0, 'detectedFunctions' => array() );
 	}
 
 	private function finalize( $progress, $baseline ) {
@@ -483,7 +477,7 @@ class ScanSite_BB_File_Integrity {
 					'signals'       => $signals,
 					'codeFindings'  => isset( $scan['findings'] ) ? $scan['findings'] : array(),
 					'expectedReason'=> $expected_label,
-					'analysisVersion' => ScanSite_BB_Code_Scanner::ANALYSIS_VERSION,
+					'analysisVersion' => '1.0.0-integrity',
 				),
 			),
 		);
