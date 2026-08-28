@@ -10,7 +10,6 @@ import ConnectionPanel from "@/app/components/blackbox/ConnectionPanel";
 import WebsiteEnvironment from "@/app/components/blackbox/WebsiteEnvironment";
 import RecentActivity from "@/app/components/blackbox/RecentActivity";
 import UsersPanel from "@/app/components/blackbox/UsersPanel";
-import CodeBrowser from "@/app/components/blackbox/CodeBrowser";
 
 export const dynamic = "force-dynamic";
 
@@ -30,7 +29,6 @@ export default async function WebsiteDetailPage({ params }) {
 
   // Newest-first, so the first match is the latest snapshot.
   const usersSnapshot = events.find((e) => e.type === "users_snapshot") ?? null;
-  const codeSnapshot = events.find((e) => e.type === "code_snapshot") ?? null;
 
   const files = await getFilesBySite(id);
   const fdist = fileDistribution(files);
@@ -133,13 +131,6 @@ export default async function WebsiteDetailPage({ params }) {
           Users &amp; Password Health
         </h2>
         <UsersPanel snapshot={usersSnapshot} />
-      </section>
-
-      <section>
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
-          Theme &amp; Plugin Code
-        </h2>
-        <CodeBrowser snapshot={codeSnapshot} />
       </section>
 
       <section>

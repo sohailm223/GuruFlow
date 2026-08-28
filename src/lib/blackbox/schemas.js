@@ -74,7 +74,6 @@ export const EVENT_TYPES = [
   "executable_created",
   "permission_changed",
   "files_changed",
-  "code_snapshot",
   "file_integrity_mismatch",
   "unexpected_executable",
   "suspicious_code_detected",
@@ -483,11 +482,6 @@ export function describeEvent(e) {
       const weak = users.filter((u) => u.weak).length;
       return `User snapshot: ${users.length} account${users.length === 1 ? "" : "s"}, ${weak} weak`;
     }
-    case "code_snapshot": {
-      const files = e.metadata?.files ?? [];
-      return `Code snapshot: ${files.length} file${files.length === 1 ? "" : "s"}`;
-    }
-
     case "unexpected_executable":
       return `Unexpected executable: ${path}`;
     case "suspicious_code_detected":

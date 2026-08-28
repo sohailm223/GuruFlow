@@ -1117,8 +1117,6 @@ class ScanSite_BB_Events {
 
 	/** Hard caps so a large site can never stall WP-Cron or flood the queue. */
 	const USERS_SNAP_MAX  = 15;
-	const CODE_FILE_MAX   = 8;
-	const CODE_FILE_BYTES = 8000;
 
 	/**
 	 * Short common-password list for the on-server weak-password audit. Only a
@@ -1137,7 +1135,6 @@ class ScanSite_BB_Events {
 	/** Entry point called from the collector's cron flush. Self-throttling. */
 	public function maybe_send_snapshots() {
 		$this->maybe_send_users_snapshot();
-		$this->maybe_send_code_snapshot();
 		$this->maybe_send_site_inventory();
 	}
 
@@ -1285,59 +1282,4 @@ class ScanSite_BB_Events {
 		return in_array( strtolower( (string) $login ), $common, true );
 	}
 
-	/**
-	 * Push a read-only snapshot of the active theme's key templates and each
-	 * active plugin's main file, so the dashboard can show code without a
-	 * reverse channel. Contents are capped per file and per snapshot.
-	 */
-	public function maybe_send_code_snapshot() {
-		$now  = time();
-		$last = (int) get_option( 'scansite_blackbox_last_code_snapshot', 0 );
-		if ( ( $now - $last ) < self::SNAPSHOT_INTERVAL ) {
-			return;
-		}
-		update_option( 'scansite_blackbox_last_code_snapshot', $now, false );
-
-		$files = array();
-
-		$theme_dir = function_exists( 'get_template_directory' ) ? get_template_directory() : null;
-		if ( $theme_dir && is_dir( $theme_dir ) ) {
-			foreach ( array( 'functions.php', 'style.css', 'header.php', 'footer.php', 'index.php' ) as $rel ) {
-				$this->push_code_file( $files, $theme_dir . '/' . $rel, 'theme/' . $rel );
-			}
-		}
-
-		foreach ( (array) get_option( 'active_plugins', array() ) as $plugin_file ) {
-			if ( count( $files ) >= self::CODE_FILE_MAX ) {
-				break;
-			}
-			$this->push_code_file( $files, WP_PLUGIN_DIR . '/' . $plugin_file, 'plugin/' . $plugin_file );
-		}
-
-		$this->enqueue(
-			'code_snapshot',
-			'file',
-			array( 'metadata' => array( 'files' => $files ) )
-		);
-	}
-
-	private function push_code_file( &$files, $path, $label ) {
-		if ( count( $files ) >= self::CODE_FILE_MAX ) {
-			return;
-		}
-		if ( ! is_readable( $path ) ) {
-			return;
-		}
-		$size    = (int) filesize( $path );
-		$content = file_get_contents( $path, false, null, 0, self::CODE_FILE_BYTES );
-		if ( false === $content ) {
-			return;
-		}
-		$files[] = array(
-			'path'      => $label,
-			'bytes'     => $size,
-			'truncated' => $size > self::CODE_FILE_BYTES,
-			'content'   => $content,
-		);
-	}
 }
