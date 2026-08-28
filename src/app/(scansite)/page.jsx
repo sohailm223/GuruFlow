@@ -1,113 +1,129 @@
 import Link from "next/link";
+import { Plus, MonitorSmartphone, TriangleAlert, ShieldAlert, PlugZap } from "lucide-react";
 import { getOverview } from "@/lib/blackbox/dashboard";
-import StatusDot from "@/app/components/blackbox/StatusDot";
+import FirstRun from "@/app/components/blackbox/FirstRun";
+import ActionCenter from "@/app/components/blackbox/ActionCenter";
+import NeedsAttention from "@/app/components/blackbox/NeedsAttention";
+import SiteHealthTable from "@/app/components/blackbox/SiteHealthTable";
+import RecentActivityFeed from "@/app/components/blackbox/RecentActivityFeed";
 import IncidentCard from "@/app/components/blackbox/IncidentCard";
-import DemoLoader from "@/app/components/blackbox/DemoLoader";
-import HeroPanel from "@/app/components/blackbox/HeroPanel";
 
 export const dynamic = "force-dynamic";
 
-export default async function OverviewPage() {
-  const { sites, incidents, counts, activity } = await getOverview();
-  const siteNames = new Map(sites.map((s) => [s.site.id, s.site.name]));
+function OperationalStats({ counts }) {
+  const tiles = [
+    {
+      label: "Sites monitored",
+      value: counts.sitesMonitored,
+      icon: MonitorSmartphone,
+      tone: "bg-sky-50 text-sky-700",
+    },
+    {
+      label: "Need attention",
+      value: counts.needAttention,
+      icon: TriangleAlert,
+      tone: counts.needAttention ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-500",
+    },
+    {
+      label: "Open incidents",
+      value: counts.openIncidents,
+      icon: ShieldAlert,
+      tone: counts.openIncidents ? "bg-rose-50 text-rose-700" : "bg-slate-100 text-slate-500",
+    },
+    {
+      label: "Collector issues",
+      value: counts.collectorIssues,
+      icon: PlugZap,
+      tone: counts.collectorIssues ? "bg-violet-50 text-violet-700" : "bg-slate-100 text-slate-500",
+    },
+  ];
 
   return (
-    <div className="space-y-8">
-      <header>
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Overview</h1>
-      </header>
-
-      <HeroPanel counts={counts} activity={activity} now={activity.now} />
-
-      {sites.length === 0 ? (
-        <FirstRun />
-      ) : (
-        <>
-
-          <section>
-            <div className="mb-3 flex items-baseline justify-between">
-              <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-                Recent Incidents
-              </h2>
-              <Link href="/incidents" className="text-sm font-medium text-teal-700 hover:underline">
-                View all
-              </Link>
-            </div>
-
-            {incidents.length === 0 ? (
-              <div className="rounded-xl border border-slate-200 bg-white p-8 text-center">
-                <p className="text-sm font-medium text-slate-900">
-                  We&apos;re receiving events from your website.
-                </p>
-                <p className="mt-1 text-sm text-slate-500">No incidents detected yet.</p>
-              </div>
-            ) : (
-              <div className="grid gap-4 lg:grid-cols-2">
-                {incidents.slice(0, 4).map((incident) => (
-                  <IncidentCard
-                    key={incident.id}
-                    incident={incident}
-                    siteName={siteNames.get(incident.siteId)}
-                  />
-                ))}
-              </div>
-            )}
-          </section>
-
-          <section>
-            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
-              Website Connection Health
-            </h2>
-            <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white">
-              {sites.map(({ site, health }) => (
-                <li key={site.id} className="flex items-center justify-between gap-4 px-5 py-3">
-                  <Link
-                    href={`/websites/${site.id}`}
-                    className="min-w-0 truncate text-sm font-medium text-slate-800 hover:text-teal-700"
-                  >
-                    {site.name}
-                  </Link>
-                  <StatusDot tone={health.tone} label={health.label} />
-                </li>
-              ))}
-            </ul>
-          </section>
-        </>
-      )}
-
-      {process.env.NODE_ENV === "development" && (
-        <section className="rounded-xl border border-dashed border-slate-300 bg-white p-5">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <p className="text-sm font-medium text-slate-900">Development</p>
-              <p className="mt-1 text-sm text-slate-500">
-                Generate demo incidents without connecting a real website.
-              </p>
-            </div>
-            <DemoLoader />
+    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      {tiles.map((t) => (
+        <div key={t.label} className="rounded-2xl border border-slate-200 bg-white p-5">
+          <div className={`inline-flex rounded-lg p-2 ${t.tone}`}>
+            <t.icon size={18} />
           </div>
-        </section>
-      )}
+          <p className="mt-3 text-3xl font-semibold tracking-tight text-slate-900">{t.value}</p>
+          <p className="text-sm text-slate-500">{t.label}</p>
+        </div>
+      ))}
     </div>
   );
 }
 
-function FirstRun() {
+export default async function OverviewPage() {
+  const ov = await getOverview();
+  const { sites, needsAttention, priorityIncidents, routineIncidents, recentActivity, counts, now } =
+    ov;
+
+  if (!sites.length) {
+    return <FirstRun />;
+  }
+
+  const siteById = new Map(sites.map((s) => [s.site.id, s.site]));
+  const incidentCards = priorityIncidents.slice(0, 4);
+
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-10 text-center">
-      <h2 className="text-xl font-semibold text-slate-900">
-        Connect Your First WordPress Website
-      </h2>
-      <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-slate-500">
-        ScanSite Black Box monitors important WordPress changes and explains what
-        happened when something goes wrong.
+    <div className="space-y-6">
+      {/* Greeting + primary action */}
+      <header className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold text-slate-900">
+            {ov.greeting}, here&apos;s what needs attention
+          </h1>
+          <p className="text-sm text-slate-500">{ov.subtitle}</p>
+        </div>
+        <Link
+          href="/websites/add"
+          className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800"
+        >
+          <Plus size={16} /> Add Website
+        </Link>
+      </header>
+
+      {/* Action center — names the most urgent thing and the next step */}
+      <ActionCenter top={ov.top} topSite={ov.topSite} now={now} />
+
+      <OperationalStats counts={counts} />
+
+      <NeedsAttention items={needsAttention} />
+
+      <SiteHealthTable sites={sites} now={now} />
+
+      {incidentCards.length > 0 && (
+        <section className="space-y-3">
+          <header className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold tracking-wide text-slate-700 uppercase">
+              Recent incidents
+            </h2>
+            <Link href="/incidents" className="text-xs font-semibold text-rose-700 hover:text-rose-800">
+              View all →
+            </Link>
+          </header>
+          <div className="grid gap-4 lg:grid-cols-2">
+            {incidentCards.map((incident) => (
+              <IncidentCard
+                key={incident.id}
+                incident={incident}
+                siteName={siteById.get(incident.siteId)?.name}
+                now={now}
+              />
+            ))}
+          </div>
+        </section>
+      )}
+
+      <RecentActivityFeed
+        activity={recentActivity}
+        routineIncidents={routineIncidents}
+        now={now}
+      />
+
+      <p className="text-center text-xs text-slate-400">
+        {counts.sitesMonitored} monitored · {recentActivity.length ? recentActivity[0].time : "no events yet"}
       </p>
-      <Link
-        href="/websites/add"
-        className="mt-6 inline-block rounded-lg bg-teal-700 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-teal-800"
-      >
-        Connect WordPress Website
-      </Link>
     </div>
   );
 }

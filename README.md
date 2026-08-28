@@ -25,14 +25,8 @@ npm install
 npm run dev
 ```
 
-Open `http://localhost:3000` → **+ Add Website** → follow the five-step wizard.
-
-To see the analysis engine without a WordPress site, use **Generate Demo
-Incidents** on the Overview page (development builds only), or:
-
-```bash
-curl -X POST http://localhost:3000/api/blackbox/demo
-```
+Open `http://localhost:3000` → **+ Add Website** → follow the five-step wizard to
+pair a real WordPress site and start receiving events.
 
 No database, no auth provider, no CMS, no external AI service. Data is stored
 as JSON under `data/blackbox/`.

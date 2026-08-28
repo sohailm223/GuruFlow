@@ -3,7 +3,16 @@
  */
 
 import { getSites, getIncidents, getIncidentsBySite, getEvents } from "./storage";
-import { connectionHealth } from "./sites";
+import { connectionHealth, timeAgo } from "./sites";
+import { describeEvent } from "./schemas";
+
+/** Severity ordering for sorting by urgency. */
+const SEVERITY_RANK = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
+
+const OPEN = (i) => !["resolved", "false_positive"].includes(i.status);
+
+/** Routine findings belong in the activity feed, not the incident queue. */
+const isRoutine = (i) => i.severity === "info";
 
 /**
  * Per-site rollup used by the website cards.
@@ -13,7 +22,7 @@ import { connectionHealth } from "./sites";
  */
 export async function getSiteStats(siteId, incidents) {
   const list = incidents ?? (await getIncidentsBySite(siteId, 100));
-  const open = list.filter((i) => !["resolved", "false_positive"].includes(i.status));
+  const open = list.filter(OPEN);
 
   return {
     risk: open.length ? Math.max(...open.map((i) => i.riskScore ?? 0)) : 0,
@@ -24,49 +33,178 @@ export async function getSiteStats(siteId, incidents) {
   };
 }
 
-/** Overview counters. */
+/** Derive a website's own health from its open incidents. */
+function websiteHealth(openIncidents) {
+  if (openIncidents.some((i) => i.severity === "critical")) return "critical";
+  if (openIncidents.some((i) => !isRoutine(i))) return "attention";
+  return "healthy";
+}
+
+/** "Good morning / afternoon / evening". */
+function greeting(now) {
+  const hour = new Date(now).getHours();
+  if (hour < 5) return "Working late";
+  if (hour < 12) return "Good morning";
+  if (hour < 18) return "Good afternoon";
+  return "Good evening";
+}
+
+/**
+ * The priority queue shown under "Needs attention": security findings and
+ * collector problems in one list, ordered by urgency.
+ */
+function buildNeedsAttention({ sites, incidents, now }) {
+  const siteById = new Map(sites.map((s) => [s.site.id, s]));
+  const items = [];
+
+  for (const incident of incidents) {
+    if (!OPEN(incident) || isRoutine(incident)) continue;
+    if (!["critical", "high", "medium"].includes(incident.severity)) continue;
+
+    const site = siteById.get(incident.siteId);
+    items.push({
+      id: incident.id,
+      kind: "incident",
+      severity: incident.severity,
+      siteId: incident.siteId,
+      siteName: site?.site.name ?? "Unknown site",
+      reason: incident.severity === "critical" ? "Possible website compromise" : incident.title,
+      detail: incident.summary,
+      cta: "Investigate",
+      href: `/incidents/${incident.id}`,
+      at: incident.startedAt,
+    });
+  }
+
+  for (const { site, collector } of sites) {
+    if (collector.key === "connected") continue;
+    const label =
+      collector.key === "issue"
+        ? `Collector hasn't reported for ${timeAgo(collector.since, now)}`
+        : collector.key === "disconnected"
+          ? "Collector disconnected"
+          : "Collector never connected";
+
+    items.push({
+      id: `conn:${site.id}`,
+      kind: "connection",
+      severity: collector.key === "disconnected" ? "high" : "medium",
+      siteId: site.id,
+      siteName: site.name,
+      reason: label,
+      detail: "Events stop arriving while the collector can't reach ScanSite.",
+      cta: "Fix connection",
+      href: `/websites/${site.id}`,
+      at: collector.since ?? now,
+    });
+  }
+
+  return items.sort((a, b) => {
+    const r = SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity];
+    return r !== 0 ? r : (b.at ?? 0) - (a.at ?? 0);
+  });
+}
+
+/** A short, friendly line for the recent-activity feed. */
+function buildActivity(events, now) {
+  const benign = new Set([
+    "plugin_updated",
+    "theme_updated",
+    "wordpress_updated",
+    "plugin_installed",
+    "login_success",
+    "logout",
+    "collector_test",
+  ]);
+
+  return events
+    .slice(0, 6)
+    .map((e) => ({
+      text: describeEvent(e),
+      time: timeAgo(e.timestamp, now),
+      tone: benign.has(e.type) ? "ok" : "dot",
+    }));
+}
+
+/** Overview model for the redesigned dashboard. */
 export async function getOverview() {
-  const [sites, incidents, events] = await Promise.all([
+  const [sitesRaw, incidents, events] = await Promise.all([
     getSites(),
     getIncidents(500),
     getEvents(5000),
   ]);
   const now = Date.now();
 
-  // Computed here rather than in a component so nothing reads the clock during
-  // a render pass.
-  const dayStart = new Date();
-  const todayFrom = new Date(dayStart.getFullYear(), dayStart.getMonth(), dayStart.getDate()).getTime();
+  const bySite = new Map();
+  for (const i of incidents) {
+    if (!bySite.has(i.siteId)) bySite.set(i.siteId, []);
+    bySite.get(i.siteId).push(i);
+  }
 
-  const withHealth = sites.map((site) => ({
-    site,
-    health: connectionHealth(site, now),
-  }));
+  const sites = sitesRaw.map((site) => {
+    const mine = bySite.get(site.id) ?? [];
+    const open = mine.filter(OPEN);
+    const collector = connectionHealth(site, now);
+    const health = websiteHealth(open);
 
-  const criticalSites = new Set(
-    incidents
-      .filter((i) => i.severity === "critical" && !["resolved", "false_positive"].includes(i.status))
-      .map((i) => i.siteId)
-  );
+    return {
+      site,
+      collector,
+      stats: getSiteStatsFromOpen(open, mine),
+      websiteHealth: health,
+      openIncidents: open,
+    };
+  });
+
+  const incidentsSorted = [...incidents].sort((a, b) => {
+    const ar = SEVERITY_RANK[a.severity] ?? 4;
+    const br = SEVERITY_RANK[b.severity] ?? 4;
+    if (ar !== br) return ar - br;
+    return (b.startedAt ?? 0) - (a.startedAt ?? 0);
+  });
+
+  const priorityIncidents = incidentsSorted.filter((i) => OPEN(i) && !isRoutine(i));
+  const routineIncidents = incidents.filter((i) => isRoutine(i));
+
+  const needsAttention = buildNeedsAttention({ sites, incidents, now });
+  const collectorIssues = sites.filter((s) => s.collector.key !== "connected").length;
+  const openIncidents = incidents.filter(OPEN).length;
+
+  const top = priorityIncidents[0] ?? null;
+  const topSite = top ? sites.find((s) => s.site.id === top.siteId) : null;
 
   return {
-    sites: withHealth,
-    incidents,
+    now,
+    greeting: greeting(now),
+    subtitle: `${sites.length} website${sites.length === 1 ? "" : "s"} · ${
+      sites.filter((s) => s.collector.key === "connected").length
+    } connected · ${openIncidents} open incident${openIncidents === 1 ? "" : "s"}`,
+    sites,
+    incidents: incidentsSorted,
+    priorityIncidents,
+    routineIncidents,
+    needsAttention,
     counts: {
-      connected: sites.length,
-      healthy: withHealth.filter((s) => s.health.key === "connected").length,
-      needsAttention: withHealth.filter((s) => s.health.key === "issue").length,
-      critical: criticalSites.size,
+      sitesMonitored: sites.length,
+      connected: sites.filter((s) => s.collector.key === "connected").length,
+      needAttention: new Set(needsAttention.map((n) => n.siteId)).size,
+      openIncidents,
+      collectorIssues,
+      critical: priorityIncidents.filter((i) => i.severity === "critical").length,
     },
-    activity: {
-      // Passed to the UI so relative ages are computed from a fixed reference
-      // rather than a clock read during render.
-      now,
-      eventsToday: events.filter((e) => e.timestamp >= todayFrom).length,
-      totalEvents: events.length,
-      lastEventAt: events.length ? Math.max(...events.map((e) => e.timestamp)) : null,
-      openIncidents: incidents.filter((i) => !["resolved", "false_positive"].includes(i.status)).length,
-    },
+    recentActivity: buildActivity(events, now),
+    top,
+    topSite: topSite?.site ?? null,
+  };
+}
+
+function getSiteStatsFromOpen(open, all) {
+  return {
+    risk: open.length ? Math.max(...open.map((i) => i.riskScore ?? 0)) : 0,
+    open: open.length,
+    critical: open.filter((i) => i.severity === "critical").length,
+    high: open.filter((i) => i.severity === "high").length,
+    total: all.length,
   };
 }
 

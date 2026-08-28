@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ArrowRight } from "lucide-react";
 import SeverityBadge from "./SeverityBadge";
 import { timeAgo } from "@/lib/blackbox/sites";
 
@@ -12,14 +13,32 @@ const STATUS_LABEL = {
   resolved: "Resolved",
 };
 
-export default function IncidentCard({ incident, siteName }) {
+const STRIPE = {
+  critical: "bg-rose-500",
+  high: "bg-orange-500",
+  medium: "bg-amber-500",
+  low: "bg-sky-500",
+  info: "bg-slate-400",
+};
+
+/**
+ * An incident card that answers "why should I care?" in five seconds:
+ * which website, what happened in plain words, how sure we are, the attack
+ * chain, and one next action.
+ */
+export default function IncidentCard({ incident, siteName, now }) {
   const chain = shortChain(incident);
 
   return (
     <Link
       href={`/incidents/${incident.id}`}
-      className="block rounded-xl border border-slate-200 bg-white p-5 transition hover:border-slate-300 hover:shadow-sm"
+      className="group relative block overflow-hidden rounded-xl border border-slate-200 bg-white p-5 pl-6 transition hover:border-slate-300 hover:shadow-md"
     >
+      <span
+        className={`absolute inset-y-0 left-0 w-1.5 ${STRIPE[incident.severity] ?? STRIPE.info}`}
+        aria-hidden
+      />
+
       <div className="flex flex-wrap items-center gap-2">
         <SeverityBadge
           severity={incident.severity}
@@ -32,31 +51,42 @@ export default function IncidentCard({ incident, siteName }) {
           </span>
         )}
         <span className="ml-auto text-xs text-slate-400">
-          {timeAgo(incident.startedAt)}
+          {timeAgo(incident.startedAt, now)}
         </span>
       </div>
 
-      <h3 className="mt-3 text-base font-semibold text-slate-900">{incident.title}</h3>
-      <p className="mt-1 line-clamp-2 text-sm text-slate-600">{incident.summary}</p>
+      {siteName && (
+        <p className="mt-3 text-sm font-semibold text-slate-900">{siteName}</p>
+      )}
 
-      <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
-        {siteName && <span className="font-medium text-slate-700">{siteName}</span>}
-        <span>
-          {incident.eventCount} event{incident.eventCount === 1 ? "" : "s"}
-        </span>
-        <span>{incident.durationMinutes} min</span>
-        <span>Confidence {incident.confidence}%</span>
-      </div>
+      <h3 className="mt-0.5 text-base font-medium text-slate-800">{incident.title}</h3>
+      <p className="mt-1.5 line-clamp-2 text-sm text-slate-600">{incident.summary}</p>
 
       {chain && (
-        <p className="mt-3 truncate font-mono text-xs text-slate-500">{chain}</p>
+        <p className="mt-3 rounded-md bg-slate-50 px-2.5 py-1.5 font-mono text-xs text-slate-600">
+          {chain}
+        </p>
       )}
+
+      <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
+        <span className="rounded-md bg-slate-100 px-1.5 py-0.5 font-medium text-slate-700">
+          {incident.eventCount} event{incident.eventCount === 1 ? "" : "s"}
+        </span>
+        <span>Risk {incident.riskScore}/100</span>
+        <span>Confidence {incident.confidence}%</span>
+        <span>{incident.durationMinutes} min</span>
+
+        <span className="ml-auto inline-flex items-center gap-1 font-semibold text-rose-700 group-hover:gap-2">
+          Investigate
+          <ArrowRight size={13} />
+        </span>
+      </div>
     </Link>
   );
 }
 
 /** "support_wp → x1.php → cron → HTTP 500" */
-function shortChain(incident) {
+export function shortChain(incident) {
   const steps = (incident.attackChain ?? [])
     .slice(0, 4)
     .map((step) => stepLabel(step, incident));
