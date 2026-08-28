@@ -20,6 +20,9 @@
 # production
 /build
 
+# black box local event/incident store (dev driver for src/lib/incidents/store.js)
+/data/
+
 # misc
 .DS_Store
 *.pem

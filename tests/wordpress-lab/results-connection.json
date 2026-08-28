@@ -1,0 +1,111 @@
+{
+  "environment": {},
+  "connection": [
+    {
+      "name": "Plugin activates without fatal error",
+      "pass": true,
+      "detail": "WordPress 6.8.3 loaded the collector"
+    },
+    {
+      "name": "Pairing code accepted by ScanSite",
+      "pass": true,
+      "detail": "siteId=site_c8b612"
+    },
+    {
+      "name": "Collector key stored in WordPress",
+      "pass": true,
+      "detail": "len=70 prefix=sk_bb_"
+    },
+    {
+      "name": "Connection state became connected",
+      "pass": true,
+      "detail": "state=connected"
+    },
+    {
+      "name": "ScanSite marks site connected",
+      "pass": true,
+      "detail": "connected"
+    },
+    {
+      "name": "Admin menu appears",
+      "pass": true,
+      "detail": "menu slugs=[\"scansite-blackbox\"]"
+    },
+    {
+      "name": "Collector key not displayed again",
+      "pass": true,
+      "detail": "rawKey=false prefix=false"
+    },
+    {
+      "name": "Connection screen renders",
+      "pass": true,
+      "detail": "2308 bytes of HTML"
+    },
+    {
+      "name": "Heartbeat reaches ScanSite",
+      "pass": true,
+      "detail": "lastSeenAt 1787851424761 -> 1787851425596"
+    },
+    {
+      "name": "Heartbeat reports real versions",
+      "pass": true,
+      "detail": "wp=6.8.3 php=8.3.32 collector=0.1.0"
+    },
+    {
+      "name": "Send Test Event reaches ScanSite",
+      "pass": true,
+      "detail": "run_connection_test() returned true"
+    },
+    {
+      "name": "ScanSite verify confirms receipt",
+      "pass": true,
+      "detail": "{\"api\":\"working\",\"authentication\":\"verified\",\"eventDelivery\":\"working\",\"collector\":\"active\"}"
+    },
+    {
+      "name": "Invalid pairing code rejected",
+      "pass": true,
+      "detail": "Invalid or expired connection code"
+    },
+    {
+      "name": "Already-used pairing code rejected",
+      "pass": true,
+      "detail": "This connection code has already been used"
+    },
+    {
+      "name": "Expired pairing code rejected",
+      "pass": true,
+      "detail": "Invalid or expired connection code"
+    },
+    {
+      "name": "Wrong ScanSite endpoint fails gracefully",
+      "pass": true,
+      "detail": "ScanSite could not be reached from this website."
+    },
+    {
+      "name": "Invalid collector key rejected",
+      "pass": true,
+      "detail": "401 Invalid collector credentials"
+    },
+    {
+      "name": "Disconnected site stops delivery",
+      "pass": true,
+      "detail": "state=error msg=This website was disconnected in ScanSite."
+    },
+    {
+      "name": "Reconnect restores the collector",
+      "pass": true,
+      "detail": "new code redeemed from WordPress"
+    },
+    {
+      "name": "No PHP notices/warnings during connection flow",
+      "pass": true,
+      "detail": "clean"
+    }
+  ],
+  "matrix": [],
+  "queue": [],
+  "privacy": [],
+  "performance": [],
+  "bugs": [],
+  "connectionPhpErrors": []
+}

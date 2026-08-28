@@ -1,0 +1,7 @@
+# Downloaded WordPress core + SQLite driver + PHP-WASM runtime are large and
+# reproducible via `node setup.mjs`. Never commit them.
+/wp/
+/wp-sqlite/
+/node_modules/
+*.sqlite
+*.sqlite-journal

@@ -1,17 +1,14 @@
-import { ClerkProvider } from "@clerk/nextjs";
 import "./globals.css";
-// import ClientRoot from "./ClientRoot";
+
+export const metadata = {
+  title: "ScanSite Black Box",
+  description: "Know exactly what happened to your website.",
+};
 
 export default function RootLayout({ children }) {
   return (
-    <ClerkProvider>
-      <html lang="en" suppressHydrationWarning>
-        <body suppressHydrationWarning>
-            
-            {children}
-          
-          </body>
-      </html>
-    </ClerkProvider>
+    <html lang="en" suppressHydrationWarning>
+      <body suppressHydrationWarning>{children}</body>
+    </html>
   );
 }
