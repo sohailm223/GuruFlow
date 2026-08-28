@@ -21,6 +21,8 @@ define( 'SCANSITE_BB_DIR', plugin_dir_path( __FILE__ ) );
 
 require_once SCANSITE_BB_DIR . 'includes/class-signing.php';
 require_once SCANSITE_BB_DIR . 'includes/class-connection.php';
+require_once SCANSITE_BB_DIR . 'includes/class-code-scanner.php';
+require_once SCANSITE_BB_DIR . 'includes/class-file-integrity.php';
 require_once SCANSITE_BB_DIR . 'includes/class-events.php';
 require_once SCANSITE_BB_DIR . 'includes/class-collector.php';
 require_once SCANSITE_BB_DIR . 'includes/class-heartbeat.php';

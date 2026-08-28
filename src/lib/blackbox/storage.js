@@ -22,11 +22,15 @@ const FILES = {
   events: path.join(DATA_DIR, "events.json"),
   incidents: path.join(DATA_DIR, "incidents.json"),
   connections: path.join(DATA_DIR, "connections.json"),
+  files: path.join(DATA_DIR, "files.json"),
+  fileScans: path.join(DATA_DIR, "file-scans.json"),
 };
 
 const LIMITS = {
   events: 5000, // keep the newest N events
   incidents: 1000,
+  files: 50000, // per-site file records for the local MVP
+  fileScans: 200,
 };
 
 /* ------------------------------------------------------------------ *
@@ -307,4 +311,109 @@ export async function deleteConnection(siteId) {
     const next = rows.filter((c) => c.siteId !== siteId);
     return { rows: next, value: next.length !== rows.length };
   });
+}
+
+/* ------------------------------------------------------------------ *
+ * File integrity records
+ * ------------------------------------------------------------------ */
+
+export async function getFiles() {
+  return readCollection("files");
+}
+
+export async function getFilesBySite(siteId) {
+  const rows = await readCollection("files");
+  return rows
+    .filter((f) => f.siteId === siteId)
+    .sort((a, b) => (b.riskScore ?? 0) - (a.riskScore ?? 0));
+}
+
+export async function getFileById(siteId, fileId) {
+  const rows = await readCollection("files");
+  return rows.find((f) => f.siteId === siteId && f.id === fileId) ?? null;
+}
+
+/**
+ * Upsert a file record keyed by siteId + relativePath, preserving a short
+ * modification history so the detail page can show before/after hashes.
+ */
+export async function upsertFile(siteId, record) {
+  return mutate("files", (rows) => {
+    const i = rows.findIndex(
+      (f) => f.siteId === siteId && f.relativePath === record.relativePath,
+    );
+
+    if (i === -1) {
+      const created = {
+        id: record.id ?? `file_${hashId(siteId + record.relativePath)}`,
+        siteId,
+        relatedEvents: [],
+        history: [],
+        ...record,
+      };
+      rows.push(created);
+      return { rows, value: created };
+    }
+
+    const prev = rows[i];
+    const changed = prev.sha256 && record.sha256 && prev.sha256 !== record.sha256;
+    const merged = {
+      ...prev,
+      ...record,
+      id: prev.id,
+      siteId,
+      previousSha256: changed ? prev.sha256 : prev.previousSha256 ?? null,
+      firstSeenAt: prev.firstSeenAt ?? record.firstSeenAt,
+      relatedEvents: prev.relatedEvents ?? [],
+      history: [
+        ...(prev.history ?? []),
+        ...(changed
+          ? [{ at: record.modifiedAt ?? Date.now(), sha256: record.sha256, status: record.integrityStatus }]
+          : []),
+      ].slice(-20),
+    };
+    rows[i] = merged;
+    return { rows, value: merged };
+  });
+}
+
+export async function addFileEventRef(siteId, relativePath, eventId) {
+  return mutate("files", (rows) => {
+    const i = rows.findIndex(
+      (f) => f.siteId === siteId && f.relativePath === relativePath,
+    );
+    if (i === -1) return { rows, value: null };
+    const related = new Set(rows[i].relatedEvents ?? []);
+    related.add(eventId);
+    rows[i] = { ...rows[i], relatedEvents: [...related].slice(-50) };
+    return { rows, value: rows[i] };
+  });
+}
+
+export async function deleteFilesForSite(siteId) {
+  return mutate("files", (rows) => {
+    const next = rows.filter((f) => f.siteId !== siteId);
+    return { rows: next, value: next.length !== rows.length };
+  });
+}
+
+export async function addScan(record) {
+  return mutate("fileScans", (rows) => {
+    rows.unshift(record);
+    return { rows, value: record };
+  });
+}
+
+export async function getScansBySite(siteId, limit = 20) {
+  const rows = await readCollection("fileScans");
+  return rows.filter((s) => s.siteId === siteId).slice(0, limit);
+}
+
+function hashId(input) {
+  // Non-cryptographic, stable identifier for file records.
+  let h = 0;
+  for (let i = 0; i < input.length; i++) {
+    h = (Math.imul(31, h) + input.charCodeAt(i)) | 0;
+  }
+  return (h >>> 0).toString(16).padStart(8, "0");
 }

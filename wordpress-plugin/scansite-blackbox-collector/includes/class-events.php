@@ -237,6 +237,12 @@ class ScanSite_BB_Events {
 				'changes' => $changes,
 			)
 		);
+
+		// A legitimate update rewrites many files; open a short trust window so
+		// the integrity engine labels them expected_change, not suspicious.
+		if ( ! $is_install ) {
+			ScanSite_BB_File_Integrity::note_expected_change( $type, $slug, $this->upgrader_name( $type, $slug, $upgrader ) );
+		}
 	}
 
 	/* ------------------------------- themes ------------------------------ */
@@ -1132,6 +1138,68 @@ class ScanSite_BB_Events {
 	public function maybe_send_snapshots() {
 		$this->maybe_send_users_snapshot();
 		$this->maybe_send_code_snapshot();
+		$this->maybe_send_site_inventory();
+	}
+
+	/** Counts of themes / plugins / uploads / users for the website dashboard. */
+	public function maybe_send_site_inventory() {
+		$now  = time();
+		$last = (int) get_option( 'scansite_blackbox_last_inventory', 0 );
+		if ( ( $now - $last ) < self::SNAPSHOT_INTERVAL ) {
+			return;
+		}
+		update_option( 'scansite_blackbox_last_inventory', $now, false );
+
+		$themes  = function_exists( 'wp_get_themes' ) ? count( wp_get_themes() ) : 0;
+		$plugins = function_exists( 'get_plugins' ) ? count( get_plugins() ) : 0;
+		$active  = count( (array) get_option( 'active_plugins', array() ) );
+
+		$users = 0;
+		if ( function_exists( 'count_users' ) ) {
+			$u     = count_users();
+			$users = isset( $u['total_users'] ) ? (int) $u['total_users'] : 0;
+		}
+
+		$uploads = WP_CONTENT_DIR . '/uploads';
+		$upload_count = 0;
+		$exec_count   = 0;
+		if ( is_dir( $uploads ) ) {
+			$budget = 5000;
+			try {
+				$it = new RecursiveIteratorIterator(
+					new RecursiveDirectoryIterator( $uploads, FilesystemIterator::SKIP_DOTS )
+				);
+				foreach ( $it as $f ) {
+					if ( $budget-- <= 0 ) {
+						break;
+					}
+					if ( ! $f->isFile() ) {
+						continue;
+					}
+					$upload_count++;
+					if ( 'php' === strtolower( $f->getExtension() ) ) {
+						$exec_count++;
+					}
+				}
+			} catch ( Exception $e ) {
+				// Non-fatal.
+			}
+		}
+
+		$this->enqueue(
+			'site_inventory',
+			'user',
+			array(
+				'metadata' => array(
+					'themes'        => $themes,
+					'plugins'       => $plugins,
+					'activePlugins' => $active,
+					'users'         => $users,
+					'uploadFiles'   => $upload_count,
+					'uploadExecutables' => $exec_count,
+				),
+			)
+		);
 	}
 
 	/**

@@ -10,6 +10,7 @@ import RecommendedActions from "@/app/components/blackbox/RecommendedActions";
 import IncidentTimeline from "@/app/components/blackbox/IncidentTimeline";
 import DetectorFindings from "@/app/components/blackbox/DetectorFindings";
 import IncidentStatusControl from "@/app/components/blackbox/IncidentStatusControl";
+import SuspiciousFileEvidence from "@/app/components/blackbox/files/SuspiciousFileEvidence";
 import { formatClock, formatDay } from "@/lib/blackbox/schemas";
 
 export const dynamic = "force-dynamic";
@@ -55,6 +56,7 @@ export default async function IncidentDetailPage({ params }) {
       </div>
 
       <LikelyCause incident={incident} />
+      <SuspiciousFileEvidence incident={incident} />
       <AttackChain incident={incident} />
       <ImpactSummary incident={incident} />
       <EvidenceList incident={incident} />

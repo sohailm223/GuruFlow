@@ -33,10 +33,19 @@ export async function POST(req) {
 
   const site = await updateSite(auth.site.id, patch);
 
+  // The heartbeat response is the only ScanSite→WordPress command channel.
+  // A requested file scan is handed over here exactly once, then cleared.
+  const command = {};
+  if (auth.site.pendingScan) {
+    command.scan = auth.site.pendingScan;
+    await updateSite(auth.site.id, { pendingScan: null });
+  }
+
   return json({
     success: true,
     siteId: auth.site.id,
     lastSeenAt: site.lastSeenAt,
     health: connectionHealth(site),
+    command,
   });
 }

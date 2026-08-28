@@ -94,6 +94,16 @@ class ScanSite_BB_Heartbeat {
 			if ( ScanSite_BB_Connection::STATE_CONNECTED !== ScanSite_BB_Connection::state() ) {
 				ScanSite_BB_Connection::set_state( ScanSite_BB_Connection::STATE_CONNECTED );
 			}
+
+			// The heartbeat response is the (only) ScanSite→WordPress command
+			// channel: a requested scan is picked up here and run by WP-Cron.
+			$body = json_decode( wp_remote_retrieve_body( $response ), true );
+			if ( is_array( $body ) && ! empty( $body['command']['scan'] ) ) {
+				$collector = ScanSite_BB_Collector::instance();
+				if ( $collector->fim ) {
+					$collector->fim->request_scan( $body['command']['scan'] );
+				}
+			}
 			return;
 		}
 

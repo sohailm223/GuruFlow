@@ -2,9 +2,10 @@
  * Read helpers shared by the dashboard pages.
  */
 
-import { getSites, getIncidents, getIncidentsBySite, getEvents } from "./storage";
+import { getSites, getIncidents, getIncidentsBySite, getEvents, getFiles } from "./storage";
 import { connectionHealth, timeAgo } from "./sites";
 import { describeEvent } from "./schemas";
+import { attentionFiles } from "./files/model";
 
 /** Severity ordering for sorting by urgency. */
 const SEVERITY_RANK = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
@@ -53,7 +54,7 @@ function greeting(now) {
  * The priority queue shown under "Needs attention": security findings and
  * collector problems in one list, ordered by urgency.
  */
-function buildNeedsAttention({ sites, incidents, now }) {
+function buildNeedsAttention({ sites, incidents, files, now }) {
   const siteById = new Map(sites.map((s) => [s.site.id, s]));
   const items = [];
 
@@ -99,6 +100,23 @@ function buildNeedsAttention({ sites, incidents, now }) {
     });
   }
 
+  // Suspicious files are operational priorities too.
+  for (const file of attentionFiles(files)) {
+    const site = siteById.get(file.siteId);
+    items.push({
+      id: file.id,
+      kind: "file",
+      severity: file.integrityStatus === "critical" ? "critical" : "high",
+      siteId: file.siteId,
+      siteName: site?.site.name ?? "Unknown site",
+      reason: `${file.filename} — ${(file.signals ?? [])[0] ?? "suspicious file"}`,
+      detail: `/${file.relativePath}`,
+      cta: "Inspect",
+      href: `/websites/${file.siteId}/files/${file.id}`,
+      at: file.modifiedAt ?? now,
+    });
+  }
+
   return items.sort((a, b) => {
     const r = SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity];
     return r !== 0 ? r : (b.at ?? 0) - (a.at ?? 0);
@@ -128,10 +146,11 @@ function buildActivity(events, now) {
 
 /** Overview model for the redesigned dashboard. */
 export async function getOverview() {
-  const [sitesRaw, incidents, events] = await Promise.all([
+  const [sitesRaw, incidents, events, files] = await Promise.all([
     getSites(),
     getIncidents(500),
     getEvents(5000),
+    getFiles(),
   ]);
   const now = Date.now();
 
@@ -141,11 +160,18 @@ export async function getOverview() {
     bySite.get(i.siteId).push(i);
   }
 
+  const filesBySite = new Map();
+  for (const f of files) {
+    if (!filesBySite.has(f.siteId)) filesBySite.set(f.siteId, []);
+    filesBySite.get(f.siteId).push(f);
+  }
+
   const sites = sitesRaw.map((site) => {
     const mine = bySite.get(site.id) ?? [];
     const open = mine.filter(OPEN);
     const collector = connectionHealth(site, now);
     const health = websiteHealth(open);
+    const myFiles = filesBySite.get(site.id) ?? [];
 
     return {
       site,
@@ -153,6 +179,12 @@ export async function getOverview() {
       stats: getSiteStatsFromOpen(open, mine),
       websiteHealth: health,
       openIncidents: open,
+      fileStats: {
+        checked: myFiles.length,
+        critical: myFiles.filter((f) => f.integrityStatus === "critical").length,
+        suspicious: myFiles.filter((f) => f.integrityStatus === "suspicious").length,
+      },
+      inventory: site.inventory ?? null,
     };
   });
 
@@ -166,7 +198,7 @@ export async function getOverview() {
   const priorityIncidents = incidentsSorted.filter((i) => OPEN(i) && !isRoutine(i));
   const routineIncidents = incidents.filter((i) => isRoutine(i));
 
-  const needsAttention = buildNeedsAttention({ sites, incidents, now });
+  const needsAttention = buildNeedsAttention({ sites, incidents, files, now });
   const collectorIssues = sites.filter((s) => s.collector.key !== "connected").length;
   const openIncidents = incidents.filter(OPEN).length;
 
@@ -191,6 +223,7 @@ export async function getOverview() {
       openIncidents,
       collectorIssues,
       critical: priorityIncidents.filter((i) => i.severity === "critical").length,
+      suspiciousFiles: attentionFiles(files).length,
     },
     recentActivity: buildActivity(events, now),
     top,

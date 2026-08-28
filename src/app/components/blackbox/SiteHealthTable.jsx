@@ -39,12 +39,13 @@ export default function SiteHealthTable({ sites, now }) {
               <th className="px-5 py-2.5 font-medium">Website</th>
               <th className="px-5 py-2.5 font-medium">Collector</th>
               <th className="px-5 py-2.5 font-medium">Last seen</th>
+              <th className="px-5 py-2.5 font-medium">Files</th>
               <th className="px-5 py-2.5 font-medium">Risk</th>
               <th className="px-5 py-2.5 font-medium">Open issues</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {sites.map(({ site, collector, stats, websiteHealth }) => {
+            {sites.map(({ site, collector, stats, websiteHealth, fileStats }) => {
               const health = WEBSITE_HEALTH[websiteHealth] ?? WEBSITE_HEALTH.healthy;
               return (
                 <tr key={site.id}>
@@ -71,6 +72,23 @@ export default function SiteHealthTable({ sites, now }) {
                   </td>
                   <td className="px-5 py-3 text-slate-600">
                     {collector.since ? timeAgo(collector.since, now) : "Never"}
+                  </td>
+                  <td className="px-5 py-3">
+                    {fileStats?.checked ? (
+                      fileStats.critical ? (
+                        <span className="rounded-md bg-rose-50 px-2 py-0.5 text-xs font-semibold text-rose-700">
+                          {fileStats.critical} critical
+                        </span>
+                      ) : fileStats.suspicious ? (
+                        <span className="rounded-md bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700">
+                          {fileStats.suspicious} suspicious
+                        </span>
+                      ) : (
+                        <span className="text-slate-400">Verified</span>
+                      )
+                    ) : (
+                      <span className="text-slate-400">—</span>
+                    )}
                   </td>
                   <td className="px-5 py-3">
                     <span

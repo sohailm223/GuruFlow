@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Plus, MonitorSmartphone, TriangleAlert, ShieldAlert, PlugZap } from "lucide-react";
+import { Plus, MonitorSmartphone, TriangleAlert, ShieldAlert, PlugZap, FileWarning } from "lucide-react";
 import { getOverview } from "@/lib/blackbox/dashboard";
 import FirstRun from "@/app/components/blackbox/FirstRun";
 import ActionCenter from "@/app/components/blackbox/ActionCenter";
@@ -36,10 +36,16 @@ function OperationalStats({ counts }) {
       icon: PlugZap,
       tone: counts.collectorIssues ? "bg-violet-50 text-violet-700" : "bg-slate-100 text-slate-500",
     },
+    {
+      label: "Suspicious files",
+      value: counts.suspiciousFiles ?? 0,
+      icon: FileWarning,
+      tone: counts.suspiciousFiles ? "bg-rose-50 text-rose-700" : "bg-slate-100 text-slate-500",
+    },
   ];
 
   return (
-    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+    <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
       {tiles.map((t) => (
         <div key={t.label} className="rounded-2xl border border-slate-200 bg-white p-5">
           <div className={`inline-flex rounded-lg p-2 ${t.tone}`}>
@@ -50,6 +56,56 @@ function OperationalStats({ counts }) {
         </div>
       ))}
     </div>
+  );
+}
+
+function FileSecurity({ sites }) {
+  const tot = sites.reduce(
+    (a, s) => ({
+      checked: a.checked + (s.fileStats?.checked ?? 0),
+      critical: a.critical + (s.fileStats?.critical ?? 0),
+      suspicious: a.suspicious + (s.fileStats?.suspicious ?? 0),
+    }),
+    { checked: 0, critical: 0, suspicious: 0 },
+  );
+  if (!tot.checked) return null;
+
+  const target = sites.find((s) => s.fileStats?.checked)?.site;
+
+  return (
+    <section className="rounded-2xl border border-slate-200 bg-white p-5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold tracking-wide text-slate-700 uppercase">File security</h2>
+        {target && (
+          <Link href={`/websites/${target.id}/files`} className="text-xs font-semibold text-rose-700 hover:text-rose-800">
+            View File Integrity →
+          </Link>
+        )}
+      </div>
+      <div className="mt-4 grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <div>
+          <p className="text-2xl font-semibold text-slate-900">{tot.checked.toLocaleString()}</p>
+          <p className="text-sm text-slate-500">Files checked</p>
+        </div>
+        <div>
+          <p className="text-2xl font-semibold text-teal-700">{Math.max(0, tot.checked - tot.suspicious - tot.critical).toLocaleString()}</p>
+          <p className="text-sm text-slate-500">Verified</p>
+        </div>
+        <div>
+          <p className="text-2xl font-semibold text-amber-700">{tot.suspicious}</p>
+          <p className="text-sm text-slate-500">Suspicious</p>
+        </div>
+        <div>
+          <p className="text-2xl font-semibold text-rose-700">{tot.critical}</p>
+          <p className="text-sm text-slate-500">Critical</p>
+        </div>
+      </div>
+      {tot.critical > 0 && (
+        <p className="mt-3 text-sm text-rose-700">
+          {tot.critical} critical file{tot.critical === 1 ? "" : "s"} need inspection.
+        </p>
+      )}
+    </section>
   );
 }
 
@@ -87,6 +143,8 @@ export default async function OverviewPage() {
       <ActionCenter top={ov.top} topSite={ov.topSite} now={now} />
 
       <OperationalStats counts={counts} />
+
+      <FileSecurity sites={sites} />
 
       <NeedsAttention items={needsAttention} />
 

@@ -120,6 +120,11 @@ export function connectionHealth(site, now = Date.now()) {
   };
 }
 
+/** Clock accessor kept out of component bodies for react-hooks/purity. */
+export function nowMs() {
+  return Date.now();
+}
+
 export function timeAgo(ms, now = Date.now()) {
   if (!ms) return "never";
   const s = Math.max(0, Math.round((now - ms) / 1000));

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getSiteById, getIncidentsBySite, getEventsBySite } from "@/lib/blackbox/storage";
+import { getSiteById, getIncidentsBySite, getEventsBySite, getFilesBySite } from "@/lib/blackbox/storage";
+import { fileDistribution } from "@/lib/blackbox/files/model";
 import { connectionHealth } from "@/lib/blackbox/sites";
 import { getSiteStats } from "@/lib/blackbox/dashboard";
 import StatusDot from "@/app/components/blackbox/StatusDot";
@@ -31,6 +32,10 @@ export default async function WebsiteDetailPage({ params }) {
   const usersSnapshot = events.find((e) => e.type === "users_snapshot") ?? null;
   const codeSnapshot = events.find((e) => e.type === "code_snapshot") ?? null;
 
+  const files = await getFilesBySite(id);
+  const fdist = fileDistribution(files);
+  const inv = site.inventory ?? null;
+
   return (
     <div className="space-y-8">
       <header>
@@ -56,6 +61,51 @@ export default async function WebsiteDetailPage({ params }) {
         <Summary label="Critical" value={stats.critical} />
         <Summary label="High" value={stats.high} />
         <Summary label="Last Event" value={stats.total ? ago(site.lastEventAt) : "—"} />
+      </section>
+
+      {/* Inventory + file integrity */}
+      <section className="grid gap-6 lg:grid-cols-2">
+        <div className="rounded-xl border border-slate-200 bg-white p-5">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Website inventory</h2>
+          {inv ? (
+            <div className="mt-3 grid grid-cols-2 gap-4">
+              <Inv label="Plugins" value={`${inv.activePlugins ?? 0} active / ${inv.plugins ?? 0}`} />
+              <Inv label="Themes" value={inv.themes ?? 0} />
+              <Inv label="Users" value={inv.users ?? 0} />
+              <Inv
+                label="Upload files"
+                value={`${(inv.uploadFiles ?? 0).toLocaleString()}${inv.uploadExecutables ? ` · ${inv.uploadExecutables} PHP` : ""}`}
+                warn={Boolean(inv.uploadExecutables)}
+              />
+            </div>
+          ) : (
+            <p className="mt-3 text-sm text-slate-500">Inventory arrives with the collector&apos;s daily snapshot.</p>
+          )}
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-white p-5">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">File integrity</h2>
+            <Link href={`/websites/${id}/files`} className="text-xs font-semibold text-rose-700 hover:text-rose-800">
+              View File Integrity →
+            </Link>
+          </div>
+          {files.length ? (
+            <>
+              <div className="mt-3 grid grid-cols-4 gap-3 text-center">
+                <div><p className="text-xl font-semibold text-slate-900">{files.length}</p><p className="text-xs text-slate-500">Checked</p></div>
+                <div><p className="text-xl font-semibold text-teal-700">{fdist.verified}</p><p className="text-xs text-slate-500">Verified</p></div>
+                <div><p className="text-xl font-semibold text-amber-700">{fdist.suspicious}</p><p className="text-xs text-slate-500">Suspicious</p></div>
+                <div><p className="text-xl font-semibold text-rose-700">{fdist.critical}</p><p className="text-xs text-slate-500">Critical</p></div>
+              </div>
+              {fdist.critical > 0 && (
+                <p className="mt-3 text-sm text-rose-700">{fdist.critical} critical file{fdist.critical === 1 ? "" : "s"} need inspection.</p>
+              )}
+            </>
+          ) : (
+            <p className="mt-3 text-sm text-slate-500">No file integrity data yet — run a scan from the File Integrity page.</p>
+          )}
+        </div>
       </section>
 
       <section>
@@ -103,6 +153,15 @@ export default async function WebsiteDetailPage({ params }) {
         <ConnectionPanel site={site} health={health} />
         <WebsiteEnvironment site={site} />
       </div>
+    </div>
+  );
+}
+
+function Inv({ label, value, warn }) {
+  return (
+    <div>
+      <p className={`text-lg font-semibold ${warn ? "text-rose-700" : "text-slate-900"}`}>{value}</p>
+      <p className="text-xs text-slate-500">{label}</p>
     </div>
   );
 }

@@ -75,6 +75,15 @@ export const EVENT_TYPES = [
   "permission_changed",
   "files_changed",
   "code_snapshot",
+  "file_integrity_mismatch",
+  "unexpected_executable",
+  "suspicious_code_detected",
+  "core_file_mismatch",
+  "plugin_file_mismatch",
+  "theme_file_mismatch",
+  "file_integrity_scan_completed",
+  "file_integrity_scan_failed",
+  "site_inventory",
 
   // db
   "option_changed",
@@ -478,6 +487,25 @@ export function describeEvent(e) {
       const files = e.metadata?.files ?? [];
       return `Code snapshot: ${files.length} file${files.length === 1 ? "" : "s"}`;
     }
+
+    case "unexpected_executable":
+      return `Unexpected executable: ${path}`;
+    case "suspicious_code_detected":
+      return `Suspicious code detected in ${path}`;
+    case "file_integrity_mismatch":
+      return `File changed outside an expected update: ${path}`;
+    case "core_file_mismatch":
+      return `WordPress core file modified: ${path}`;
+    case "plugin_file_mismatch":
+      return `Plugin file modified outside an update: ${path}`;
+    case "theme_file_mismatch":
+      return `Theme file modified outside an update: ${path}`;
+    case "file_integrity_scan_completed":
+      return `File integrity scan completed (${e.metadata?.filesChecked ?? 0} files, ${e.metadata?.critical ?? 0} critical)`;
+    case "file_integrity_scan_failed":
+      return `File integrity scan failed${e.metadata?.reason ? ` (${e.metadata.reason})` : ""}`;
+    case "site_inventory":
+      return `Site inventory: ${e.metadata?.plugins ?? 0} plugins, ${e.metadata?.themes ?? 0} themes, ${e.metadata?.users ?? 0} users`;
 
     default:
       return name ? `${e.type} — ${name}` : e.type;

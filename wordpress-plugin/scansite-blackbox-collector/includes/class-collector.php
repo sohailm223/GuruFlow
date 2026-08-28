@@ -23,6 +23,9 @@ class ScanSite_BB_Collector {
 	/** @var ScanSite_BB_Events */
 	public $events;
 
+	/** @var ScanSite_BB_File_Integrity */
+	public $fim;
+
 	public static function instance() {
 		if ( null === self::$instance ) {
 			self::$instance = new self();
@@ -33,6 +36,8 @@ class ScanSite_BB_Collector {
 	public function boot() {
 		$this->events = new ScanSite_BB_Events();
 		$this->events->register_hooks();
+
+		$this->fim = new ScanSite_BB_File_Integrity( $this->events );
 
 		add_action( self::FLUSH_HOOK, array( $this, 'flush' ) );
 		add_filter( 'cron_schedules', array( $this, 'register_interval' ) );
@@ -77,6 +82,11 @@ class ScanSite_BB_Collector {
 
 		// Daily, self-throttled users/code snapshots for the dashboard panels.
 		$this->events->maybe_send_snapshots();
+
+		// Bounded, resumable file-integrity batches (baseline + requested scans).
+		if ( $this->fim ) {
+			$this->fim->maybe_run();
+		}
 
 		$batch = ScanSite_BB_Events::take_batch();
 		if ( empty( $batch ) ) {

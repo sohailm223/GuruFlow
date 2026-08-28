@@ -17,6 +17,7 @@ import {
   getIncidentById,
   updateSite,
 } from "./storage";
+import { recordFileEvidence } from "./files/model";
 
 /**
  * Handle an already-authenticated batch of collector events.
@@ -38,6 +39,9 @@ export async function ingestEvents(siteId, payload) {
     lastEventAt: stored.length ? stored[stored.length - 1].timestamp : undefined,
     lastSeenAt: Date.now(),
   });
+
+  // Persist normalised file records + inventory derived from these events.
+  await recordFileEvidence(siteId, stored);
 
   if (!stored.length) {
     return { ok: true, accepted: 0, duplicates, rejected: batch.rejected, incidents: [] };
