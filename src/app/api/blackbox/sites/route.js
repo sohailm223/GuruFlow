@@ -1,5 +1,5 @@
 import { json, fail, readJson } from "../_lib";
-import { getSites, storageInfo } from "@/lib/blackbox/storage";
+import { getSites, storageInfo, recordAudit } from "@/lib/blackbox/storage";
 import { createSiteRecord, normalizeSiteUrl } from "@/lib/blackbox/sites";
 import { issueConnectionCode } from "@/lib/blackbox/connection";
 import { createSite } from "@/lib/blackbox/storage";
@@ -27,8 +27,8 @@ export async function GET() {
  * WordPress plugin redeems the code via /api/blackbox/connect.
  */
 export async function POST(req) {
-  const { ok, body, error } = await readJson(req);
-  if (!ok) return fail(400, error);
+  const { ok, body, error, status } = await readJson(req);
+  if (!ok) return fail(status ?? 400, error);
 
   const name = typeof body.name === "string" ? body.name.trim() : "";
   if (!name) return fail(400, "Website name is required");
@@ -39,6 +39,7 @@ export async function POST(req) {
 
   const site = createSiteRecord({ name, url, environment: body.environment });
   await createSite(site);
+  await recordAudit({ action: "site_added", siteId: site.id, name: site.name, url: site.url });
 
   const pairing = await issueConnectionCode(site.id);
 

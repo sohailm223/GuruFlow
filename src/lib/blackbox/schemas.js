@@ -254,9 +254,34 @@ function normalizeActor(actor) {
 
 function normalizeTarget(target) {
   if (!target) return undefined;
-  if (typeof target === "string") return { name: target };
+  if (typeof target === "string") return { name: capString(target) };
   if (typeof target !== "object") return undefined;
-  return { ...target };
+  return capValue(target, 1);
+}
+
+/* Input-shaping caps so a hostile collector can't bloat storage. */
+const MAX_STR = 2000;
+const MAX_DEPTH = 4;
+const MAX_KEYS = 100;
+
+function capString(s) {
+  return typeof s === "string" && s.length > MAX_STR ? s.slice(0, MAX_STR) : s;
+}
+
+function capValue(v, depth) {
+  if (depth > MAX_DEPTH) return null;
+  if (typeof v === "string") return capString(v);
+  if (Array.isArray(v)) return v.slice(0, MAX_KEYS).map((x) => capValue(x, depth + 1));
+  if (v && typeof v === "object") {
+    const out = {};
+    let c = 0;
+    for (const k of Object.keys(v)) {
+      if (c++ >= MAX_KEYS) break;
+      out[capString(k)] = capValue(v[k], depth + 1);
+    }
+    return out;
+  }
+  return v;
 }
 
 /** One raw collector event → internal event, or a rejection reason. */
@@ -293,9 +318,9 @@ export function normalizeEvent(raw, { siteId, receivedAt = Date.now() } = {}) {
       actor: normalizeActor(raw.actor),
       target: normalizeTarget(raw.target ?? raw.path),
       changes,
-      path: typeof raw.path === "string" ? raw.path : raw.target?.path ?? undefined,
+      path: capString(typeof raw.path === "string" ? raw.path : raw.target?.path) ?? undefined,
       count: Number.isFinite(raw.count) ? Math.max(0, Math.floor(raw.count)) : undefined,
-      metadata: raw.metadata && typeof raw.metadata === "object" ? raw.metadata : {},
+      metadata: raw.metadata && typeof raw.metadata === "object" ? capValue(raw.metadata, 1) : {},
       receivedAt,
     },
   };

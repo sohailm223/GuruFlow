@@ -143,6 +143,10 @@ export default async function OverviewPage() {
 
   const firstFinding = topFile?.codeFindings?.[0] ?? null;
 
+  // Routine maintenance is shown at the bottom of the page, never mixed in
+  // with the items that need attention.
+  const routine = (data.routineIncidents ?? []).slice(0, 6);
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -170,7 +174,7 @@ export default async function OverviewPage() {
                   <p className="text-xs font-semibold uppercase tracking-wide text-rose-400">Attention required</p>
                   <span className="rounded border border-rose-500/40 bg-rose-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-rose-300">CRITICAL</span>
                 </div>
-                <p className="mt-1 text-lg font-semibold text-slate-100">{data.topSite?.name ?? "A website"} may be compromised</p>
+                <p className="mt-1 text-lg font-semibold text-slate-100">Possible compromise on {data.topSite?.name ?? "a website"}</p>
                 <p className="mt-1 text-sm text-slate-400">{data.top.title}</p>
               </div>
             </div>
@@ -200,6 +204,42 @@ export default async function OverviewPage() {
           </div>
 
           <div className="grid gap-6 lg:grid-cols-2">
+            {/* Criticals come before any summary chart: this is the list an
+                operator acts on. Routine maintenance is deliberately excluded
+                here (see Recent Activity at the bottom). */}
+            <Panel title="Needs Attention">
+              {data.needsAttention.length === 0 ? (
+                <p className="text-sm text-slate-500">Nothing needs attention right now.</p>
+              ) : (
+                <div className="space-y-3">
+                  {data.needsAttention.slice(0, 4).map((n) => (
+                    <Link
+                      key={n.id}
+                      href={n.href ?? "#"}
+                      className="block rounded-xl border border-slate-800 bg-slate-950/60 p-3 hover:border-slate-700"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span
+                          className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${
+                            n.severity === "critical"
+                              ? "bg-rose-500/10 text-rose-400"
+                              : n.severity === "high"
+                              ? "bg-orange-500/10 text-orange-400"
+                              : "bg-amber-500/10 text-amber-400"
+                          }`}
+                        >
+                          {n.severity.toUpperCase()}
+                        </span>
+                        <span className="text-[11px] text-slate-500">{timeAgo(n.at, now)}</span>
+                      </div>
+                      <p className="mt-1 text-sm font-medium text-slate-200">{n.siteName}</p>
+                      <p className="text-xs text-slate-500">{n.reason}</p>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </Panel>
+
             <Panel
               title="File Security"
               action={<Link href="/files" className="text-xs text-teal-400 hover:underline">View File Integrity</Link>}
@@ -224,37 +264,9 @@ export default async function OverviewPage() {
               </div>
             </Panel>
 
-            <Panel title="Needs Attention">
-              {data.needsAttention.length === 0 ? (
-                <p className="text-sm text-slate-500">Nothing needs attention right now.</p>
-              ) : (
-                <div className="space-y-3">
-                  {data.needsAttention.slice(0, 4).map((n) => (
-                    <div key={n.id} className="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-                      <div className="flex items-center justify-between">
-                        <span
-                          className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${
-                            n.severity === "critical"
-                              ? "bg-rose-500/10 text-rose-400"
-                              : n.severity === "high"
-                              ? "bg-orange-500/10 text-orange-400"
-                              : "bg-amber-500/10 text-amber-400"
-                          }`}
-                        >
-                          {n.severity.toUpperCase()}
-                        </span>
-                        <span className="text-[11px] text-slate-500">{timeAgo(n.at, now)}</span>
-                      </div>
-                      <p className="mt-1 text-sm font-medium text-slate-200">{n.siteName}</p>
-                      <p className="text-xs text-slate-500">{n.reason}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </Panel>
           </div>
 
-          <Panel title="Websites" action={<Link href="/websites" className="text-xs text-teal-400 hover:underline">View all</Link>}>
+          <Panel title="Website Health" action={<Link href="/websites" className="text-xs text-teal-400 hover:underline">View all</Link>}>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
                 <thead>
@@ -414,6 +426,54 @@ export default async function OverviewPage() {
           </Panel>
         </div>
       </div>
+
+      {/* Recent Activity is the last thing on the page: routine maintenance and
+          benign events live here, deliberately separated from the criticals at
+          the top so nothing important is diluted by noise. */}
+      <Panel title="Recent Activity" action={<Link href="/events" className="text-xs text-teal-400 hover:underline">All events</Link>}>
+        <div className="grid gap-6 lg:grid-cols-2">
+          <div>
+            {data.recentActivity.length === 0 ? (
+              <p className="text-sm text-slate-500">No activity recorded yet.</p>
+            ) : (
+              <ul className="space-y-2">
+                {data.recentActivity.map((a, i) => (
+                  <li key={i} className="flex items-start gap-3 text-sm">
+                    <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${a.tone === "ok" ? "bg-emerald-500" : "bg-slate-500"}`} />
+                    <span className="text-slate-300">{a.text}</span>
+                    <span className="ml-auto shrink-0 text-xs text-slate-500">{a.time}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <div>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Routine maintenance
+            </p>
+            {routine.length === 0 ? (
+              <p className="text-sm text-slate-500">No routine maintenance recorded.</p>
+            ) : (
+              <ul className="space-y-2">
+                {routine.map((r) => (
+                  <li key={r.id}>
+                    <Link href={`/incidents/${r.id}`} className="flex items-start gap-3 text-sm hover:text-teal-300">
+                      <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-sky-500" />
+                      <span className="text-slate-400">{r.title}</span>
+                      <span className="ml-auto shrink-0 text-xs text-slate-600">{timeAgo(r.startedAt, now)}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <p className="mt-3 text-xs leading-relaxed text-slate-600">
+              Routine updates and expected changes are informational. They are never mixed into the items that need
+              attention above.
+            </p>
+          </div>
+        </div>
+      </Panel>
     </div>
   );
 }

@@ -1,6 +1,8 @@
 import { json, fail, readJson } from "../_lib";
 import { authenticateCollector } from "@/lib/blackbox/auth";
+import { collectorRateLimit } from "@/lib/blackbox/ratelimit";
 import { acceptKeyRotation } from "@/lib/blackbox/connection";
+import { recordAudit } from "@/lib/blackbox/storage";
 
 export const runtime = "nodejs";
 
@@ -15,14 +17,18 @@ export const runtime = "nodejs";
  * Body: { newCollectorKey: "sk_bb_…" }
  */
 export async function POST(req) {
-  const { ok, body, raw, error } = await readJson(req);
-  if (!ok) return fail(400, error);
+  const { ok, body, raw, error, status } = await readJson(req);
+  if (!ok) return fail(status ?? 400, error);
 
   const auth = await authenticateCollector(req, raw);
   if (!auth.ok) return fail(auth.status, auth.error);
 
+  if (!collectorRateLimit(auth.site.id)) return fail(429, "Too many requests");
+
   const result = await acceptKeyRotation(auth.site.id, body?.newCollectorKey);
   if (!result.ok) return fail(result.status, result.error);
+
+  await recordAudit({ action: "key_rotation", siteId: auth.site.id, source: "collector" });
 
   return json({ success: true, siteId: auth.site.id, rotatedAt: result.rotatedAt });
 }

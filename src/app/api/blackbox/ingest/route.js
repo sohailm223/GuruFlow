@@ -1,5 +1,6 @@
 import { json, fail, readJson } from "../_lib";
 import { authenticateCollector } from "@/lib/blackbox/auth";
+import { collectorRateLimit } from "@/lib/blackbox/ratelimit";
 import { ingestEvents } from "@/lib/blackbox/ingest";
 
 export const runtime = "nodejs";
@@ -14,11 +15,13 @@ export const runtime = "nodejs";
  * Body: { site, events: [ …up to 100 ] }
  */
 export async function POST(req) {
-  const { ok: parsed, body, raw, error } = await readJson(req);
-  if (!parsed) return fail(400, error);
+  const { ok: parsed, body, raw, error, status } = await readJson(req);
+  if (!parsed) return fail(status ?? 400, error);
 
   const auth = await authenticateCollector(req, raw);
   if (!auth.ok) return fail(auth.status, auth.error);
+
+  if (!collectorRateLimit(auth.site.id)) return fail(429, "Too many requests");
 
   const result = await ingestEvents(auth.site.id, body);
   if (!result.ok) {

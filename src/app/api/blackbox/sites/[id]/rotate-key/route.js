@@ -1,5 +1,5 @@
 import { json, fail } from "../../../_lib";
-import { getSiteById } from "@/lib/blackbox/storage";
+import { getSiteById, recordAudit } from "@/lib/blackbox/storage";
 import { requestKeyRotation } from "@/lib/blackbox/connection";
 
 export const runtime = "nodejs";
@@ -21,6 +21,8 @@ export async function POST(_req, { params }) {
 
   const result = await requestKeyRotation(id);
   if (!result.ok) return fail(result.status, result.error);
+
+  await recordAudit({ action: "key_rotation_requested", siteId: id, name: site.name });
 
   return json({
     siteId: id,

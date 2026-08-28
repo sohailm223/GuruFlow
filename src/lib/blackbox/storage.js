@@ -24,6 +24,8 @@ const FILES = {
   connections: path.join(DATA_DIR, "connections.json"),
   files: path.join(DATA_DIR, "files.json"),
   fileScans: path.join(DATA_DIR, "file-scans.json"),
+  trusted: path.join(DATA_DIR, "trusted-files.json"),
+  audit: path.join(DATA_DIR, "audit.json"),
 };
 
 const LIMITS = {
@@ -31,6 +33,8 @@ const LIMITS = {
   incidents: 1000,
   files: 50000, // per-site file records for the local MVP
   fileScans: 200,
+  trusted: 5000,
+  audit: 2000,
 };
 
 /* ------------------------------------------------------------------ *
@@ -55,7 +59,15 @@ function withLock(key, fn) {
 }
 
 export function storageInfo() {
-  return { driver: usingMemory ? "memory" : "json-file", dir: DATA_DIR };
+  return {
+    driver: usingMemory ? "memory" : "json-file",
+    dir: DATA_DIR,
+    // Surface the fallback loudly so a read-only deployment is obvious instead
+    // of silently losing data on restart.
+    warning: usingMemory
+      ? "Filesystem is not writable — running on in-memory storage. Data will be LOST on restart. Deploy on a host with persistent disk."
+      : null,
+  };
 }
 
 async function readCollection(name) {
@@ -82,7 +94,17 @@ async function writeCollection(name, rows) {
 
   try {
     await fs.mkdir(DATA_DIR, { recursive: true });
-    await fs.writeFile(FILES[name], JSON.stringify(capped, null, 2), "utf8");
+    const target = FILES[name];
+    const tmp = `${target}.tmp`;
+    // Keep the previous good copy so a torn write never destroys data.
+    try {
+      await fs.copyFile(target, `${target}.bak`);
+    } catch {
+      /* first write — nothing to back up */
+    }
+    // Atomic: write to a temp file, then rename over the target.
+    await fs.writeFile(tmp, JSON.stringify(capped, null, 2), "utf8");
+    await fs.rename(tmp, target);
   } catch (err) {
     if (!usingMemory) {
       console.error(
@@ -416,4 +438,81 @@ function hashId(input) {
     h = (Math.imul(31, h) + input.charCodeAt(i)) | 0;
   }
   return (h >>> 0).toString(16).padStart(8, "0");
+}
+
+/* ------------------------------------------------------------------ *
+ * Trusted files (path + SHA-256). Trust expires when the hash changes.
+ * ------------------------------------------------------------------ */
+
+export async function getTrustedFiles() {
+  return readCollection("trusted");
+}
+
+export async function getTrustedBySite(siteId) {
+  const rows = await readCollection("trusted");
+  return rows.filter((t) => t.siteId === siteId);
+}
+
+export async function findTrusted(siteId, relativePath) {
+  const rows = await readCollection("trusted");
+  return rows.find((t) => t.siteId === siteId && t.relativePath === relativePath) ?? null;
+}
+
+export async function addTrustedFile(siteId, { relativePath, sha256, reason }) {
+  return mutate("trusted", (rows) => {
+    const i = rows.findIndex((t) => t.siteId === siteId && t.relativePath === relativePath);
+    const rec = {
+      siteId,
+      relativePath,
+      sha256,
+      reason: reason ?? null,
+      createdAt: Date.now(),
+      expired: false,
+    };
+    if (i >= 0) {
+      rows[i] = { ...rows[i], ...rec };
+      return { rows, value: rows[i] };
+    }
+    const created = { id: `trust_${hashId(siteId + relativePath)}`, ...rec };
+    rows.push(created);
+    return { rows, value: created };
+  });
+}
+
+/** Mark a trusted entry expired (hash changed) without deleting the record. */
+export async function expireTrusted(id) {
+  return mutate("trusted", (rows) => {
+    const i = rows.findIndex((t) => t.id === id);
+    if (i === -1) return { rows, value: null };
+    rows[i] = { ...rows[i], expired: true, expiredAt: Date.now() };
+    return { rows, value: rows[i] };
+  });
+}
+
+export async function removeTrustedFile(id) {
+  return mutate("trusted", (rows) => {
+    const next = rows.filter((t) => t.id !== id);
+    return { rows: next, value: next.length !== rows.length };
+  });
+}
+
+/* ------------------------------------------------------------------ *
+ * Management audit log (local, append-only).
+ * ------------------------------------------------------------------ */
+
+export async function getAudit(limit = 200) {
+  const rows = await readCollection("audit");
+  return rows.slice(-limit).reverse();
+}
+
+export async function recordAudit(entry) {
+  return mutate("audit", (rows) => {
+    const rec = {
+      id: `aud_${hashId(String(Date.now()) + (entry.action ?? "") + Math.random())}`,
+      at: Date.now(),
+      ...entry,
+    };
+    rows.push(rec);
+    return { rows, value: rec };
+  });
 }

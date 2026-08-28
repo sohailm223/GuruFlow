@@ -62,16 +62,23 @@ export function analyzeIncident(events, opts = {}) {
   const { severity, label: severityLabel } = severityFromScore(riskScore);
 
   const top = findings[0];
-  const confidence = confidenceFor({
-    findings,
-    evidenceCount: top?.evidence?.length ?? 0,
-    eventCount: sorted.length,
-  });
-
   const concepts = mergeConcepts(findings);
   const chain = buildAttackChain(sorted, scored);
   const actors = extractActors(sorted);
   const clusters = clusterEvents(sorted).filter((c) => c.keys.length);
+
+  const durationMinutes = sorted.length
+    ? Math.round((sorted[sorted.length - 1].timestamp - sorted[0].timestamp) / 60_000)
+    : 0;
+
+  const confidence = confidenceFor({
+    findings,
+    evidenceCount: top?.evidence?.length ?? 0,
+    eventCount: sorted.length,
+    // Size of the largest identity-linked cluster (same actor/IP/session/target).
+    correlation: Math.max(0, (clusters[0]?.events?.length ?? 1) - 1),
+    durationMinutes,
+  });
 
   return {
     id: opts.id ?? newIncidentId(),

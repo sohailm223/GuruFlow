@@ -8,6 +8,7 @@ import {
   deleteIncidentsBySite,
   deleteEventsBySite,
   getConnection,
+  recordAudit,
 } from "@/lib/blackbox/storage";
 import { connectionHealth } from "@/lib/blackbox/sites";
 import { publicConnection } from "@/lib/blackbox/connection";
@@ -39,8 +40,8 @@ export async function GET(_req, { params }) {
 /** PATCH /api/blackbox/sites/:id — rename, change environment, etc. */
 export async function PATCH(req, { params }) {
   const { id } = await params;
-  const { ok, body, error } = await readJson(req);
-  if (!ok) return fail(400, error);
+  const { ok, body, error, status } = await readJson(req);
+  if (!ok) return fail(status ?? 400, error);
 
   const existing = await getSiteById(id);
   if (!existing) return fail(404, "Website not found");
@@ -80,5 +81,6 @@ export async function DELETE(req, { params }) {
   }
 
   await deleteSite(id);
+  await recordAudit({ action: "site_deleted", siteId: id, name: existing.name, purge });
   return json({ deleted: true, siteId: id, purge, removed });
 }

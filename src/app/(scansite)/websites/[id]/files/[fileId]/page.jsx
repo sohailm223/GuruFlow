@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getFileById, getIncidentsBySite } from "@/lib/blackbox/storage";
+import { getFileById, getIncidentsBySite, getEventsBySite } from "@/lib/blackbox/storage";
 import { relatedIncidents, levelFor, STATUS_LABEL } from "@/lib/blackbox/files/model";
 import { timeAgo, nowMs } from "@/lib/blackbox/sites";
 import { formatClock } from "@/lib/blackbox/schemas";
@@ -17,6 +17,11 @@ export default async function FileInspectPage({ params }) {
 
   const incidents = await getIncidentsBySite(id, 100);
   const related = relatedIncidents(file, incidents);
+  const siteEvents = await getEventsBySite(id, 500);
+  const wanted = new Set(file.relatedEvents ?? []);
+  const relatedEvents = wanted.size
+    ? siteEvents.filter((e) => wanted.has(e.eventId ?? e.id))
+    : siteEvents.filter((e) => e.path === file.path || e.metadata?.file?.relativePath === file.relativePath);
   const now = nowMs();
   const level = levelFor(file.riskScore ?? 0);
 
@@ -38,7 +43,7 @@ export default async function FileInspectPage({ params }) {
         <div className="mt-4 grid grid-cols-2 gap-4 lg:grid-cols-4">
           <Meta label="Confidence" value={`${file.confidence}%`} />
           <Meta label="First seen" value={file.firstSeenAt ? formatClock(file.firstSeenAt) : "—"} />
-          <Meta label="Last modified" value={file.modifiedAt ? timeAgo(file.modifiedAt, now) : "—"} />
+          <Meta label="Last seen" value={file.lastSeenAt ? formatClock(file.lastSeenAt) : "—"} />
           <Meta label="Size" value={`${(file.size ?? 0).toLocaleString()} B`} />
         </div>
       </header>
@@ -79,6 +84,11 @@ export default async function FileInspectPage({ params }) {
       <section>
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-700">Suspicious code</h2>
         <CodeEvidence findings={file.codeFindings ?? []} />
+        <p className="mt-2 text-xs leading-relaxed text-slate-500">
+          These excerpts are the only code ScanSite ever sees: the collector reports matched lines from the WordPress
+          server. ScanSite does not download whole files, does not execute them, and does not read the rest of the
+          file.
+        </p>
       </section>
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -89,9 +99,29 @@ export default async function FileInspectPage({ params }) {
             <Row k="Status" v={STATUS_LABEL[file.integrityStatus] ?? file.integrityStatus} />
             <Row k="SHA-256" v={file.sha256} mono />
             <Row k="Previous SHA-256" v={file.previousSha256} mono />
+            <Row k="Size" v={`${(file.size ?? 0).toLocaleString()} B`} />
+            <Row k="First seen" v={file.firstSeenAt ? formatClock(file.firstSeenAt) : null} />
+            <Row k="Last seen" v={file.lastSeenAt ? formatClock(file.lastSeenAt) : null} />
+            <Row k="Last modified" v={file.modifiedAt ? timeAgo(file.modifiedAt, now) : null} />
             <Row k="Extension" v={`.${file.extension}`} />
             <Row k="Category" v={file.category} />
+            <Row
+              k="Trusted"
+              v={
+                file.trustedExpired
+                  ? "Was trusted — trust expired because the hash changed"
+                  : file.trusted
+                    ? "Yes — path + SHA-256 match a trusted entry"
+                    : "No"
+              }
+            />
+            <Row k="Source code analysis" v="Not performed" />
           </dl>
+          <p className="mt-3 text-xs leading-relaxed text-slate-500">
+            Source code analysis is not performed: ScanSite never uploads file contents and never runs them. Everything
+            above comes from on-server metadata (path, size, hash, timestamps) plus the collector&apos;s static
+            pattern findings.
+          </p>
 
           {(file.history ?? []).length > 0 && (
             <>
@@ -132,6 +162,39 @@ export default async function FileInspectPage({ params }) {
           </div>
         </section>
       </div>
+
+      {/* Related events — the collector activity that produced this record */}
+      <section className="rounded-xl border border-slate-200 bg-white p-5">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-700">
+          Related events ({relatedEvents.length})
+        </h2>
+        {relatedEvents.length === 0 ? (
+          <p className="mt-2 text-sm text-slate-500">
+            No recorded events reference this file. The record came from a file inventory report.
+          </p>
+        ) : (
+          <ul className="mt-3 divide-y divide-slate-100">
+            {relatedEvents.slice(0, 12).map((e) => (
+              <li key={e.eventId ?? e.id} className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 py-2 text-sm">
+                <span className="font-medium text-slate-700">{(e.type ?? "event").replace(/_/g, " ")}</span>
+                <span className="text-xs text-slate-400">{formatClock(e.timestamp)}</span>
+                {e.actor?.username ?? (typeof e.actor === "string" ? e.actor : null) ? (
+                  <span className="text-xs text-slate-500">
+                    actor {e.actor?.username ?? e.actor}
+                  </span>
+                ) : null}
+                {e.path ? <span className="break-all font-mono text-xs text-slate-400">{e.path}</span> : null}
+                <Link
+                  href={`/websites/${id}/events`}
+                  className="ml-auto text-xs font-medium text-slate-500 hover:text-slate-800"
+                >
+                  Open events →
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
     </div>
   );
 }

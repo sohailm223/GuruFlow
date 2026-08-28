@@ -222,10 +222,182 @@ for (const [c, re] of confidences) {
   check(`confidence ${c}% -> ${re.source}`, re.test(confidenceLabel(c)), `got ${confidenceLabel(c)}`);
 }
 
+/* --------------------------------------- hardening: request shaping */
+console.log('\nHardening: body limits, field caps, trusted files, notes, audit');
+
+const oversized = {
+  site: siteId,
+  events: [{ eventId: `evt_${unique()}`, type: 'plugin_activated', metadata: { blob: 'x'.repeat(1_200_000) } }],
+};
+const tooBig = await call('POST', '/api/blackbox/ingest', oversized, H2);
+check('Oversized body -> 413', tooBig.status === 413, `got ${tooBig.status}`);
+
+const longPathEvent = {
+  eventId: `evt_${unique()}`,
+  type: 'file_modified',
+  category: 'file',
+  timestamp: new Date().toISOString(),
+  path: '/wp-content/' + 'a'.repeat(5000) + '.php',
+  metadata: { a: { b: { c: { d: { e: { f: { g: { h: { i: 'too deep' } } } } } } } }, long: 'y'.repeat(5000) },
+};
+const capped = await call('POST', '/api/blackbox/ingest', { site: siteId, events: [longPathEvent] }, H2);
+check('Oversized-field event still accepted (it is capped, not rejected)', capped.status === 200, `got ${capped.status}`);
+
+const readBack = await call('GET', `/api/blackbox/events?site=${siteId}&type=file_modified&limit=5`);
+const stored = (readBack.body?.events ?? []).find((e) => e.eventId === longPathEvent.eventId);
+check('Long path is truncated on ingest', Boolean(stored) && stored.path.length <= 2000, `len=${stored?.path?.length}`);
+check('Long metadata string is truncated on ingest', Boolean(stored) && String(stored.metadata?.long ?? '').length <= 2000, `len=${stored?.metadata?.long?.length}`);
+
+const depthOf = (v) => (v && typeof v === 'object' ? 1 + Math.max(0, ...Object.values(v).map(depthOf)) : 0);
+check('Metadata depth is capped at 4 levels', Boolean(stored) && depthOf(stored.metadata) <= 5, `depth=${stored ? depthOf(stored.metadata) : 'n/a'}`);
+check('Deeply nested metadata does not survive past the cap', !JSON.stringify(stored?.metadata ?? {}).includes('too deep'));
+
+/* ------------------------------------------------- trusted files */
+const sha = (s) => crypto.createHash('sha256').update(s).digest('hex');
+const trustedPath = 'wp-content/themes/twentytwentyfour/functions.php';
+const shaA = sha('clean-content-v1');
+const shaB = sha('tampered-content-v2');
+
+const badTrust = await call('POST', `/api/blackbox/sites/${siteId}/files/trusted`, { relativePath: trustedPath, sha256: 'not-a-hash' });
+check('Trusted file with an invalid hash -> 400', badTrust.status === 400, `got ${badTrust.status}`);
+
+const addTrust = await call('POST', `/api/blackbox/sites/${siteId}/files/trusted`, { relativePath: trustedPath, sha256: shaA, reason: 'Verified against WordPress.org release' });
+check('Trusted file created', addTrust.status === 201 && addTrust.body?.trusted?.sha256 === shaA, `got ${addTrust.status}`);
+
+const listTrust = await call('GET', `/api/blackbox/sites/${siteId}/files/trusted`);
+check('Trusted file listed', (listTrust.body?.trusted ?? []).some((t) => t.relativePath === trustedPath));
+
+const fileEvent = (sha256) => ({
+  eventId: `evt_${unique()}`,
+  type: 'file_modified',
+  category: 'file',
+  timestamp: new Date().toISOString(),
+  path: `/${trustedPath}`,
+  metadata: {
+    file: {
+      relativePath: trustedPath,
+      filename: 'functions.php',
+      extension: 'php',
+      category: 'theme',
+      sha256,
+      size: 1234,
+      integrityStatus: 'modified',
+      riskScore: 55,
+      confidence: 60,
+      firstSeenAt: Date.now(),
+      lastSeenAt: Date.now(),
+      modifiedAt: Date.now(),
+    },
+  },
+});
+
+await call('POST', '/api/blackbox/ingest', { site: siteId, events: [fileEvent(shaA)] }, H2);
+let filesNow = await call('GET', `/api/blackbox/sites/${siteId}/files?search=functions.php`);
+let f = (filesNow.body?.files ?? []).find((x) => x.relativePath === trustedPath);
+check('Trusted hash marks the file verified', f?.trusted === true && f?.integrityStatus === 'verified', `trusted=${f?.trusted} status=${f?.integrityStatus}`);
+check('Trusted file risk is held down', (f?.riskScore ?? 99) <= 10, `risk=${f?.riskScore}`);
+
+await call('POST', '/api/blackbox/ingest', { site: siteId, events: [fileEvent(shaB)] }, H2);
+filesNow = await call('GET', `/api/blackbox/sites/${siteId}/files?search=functions.php`);
+f = (filesNow.body?.files ?? []).find((x) => x.relativePath === trustedPath);
+check('Hash change expires the trust', f?.trustedExpired === true && f?.trusted !== true, `trustedExpired=${f?.trustedExpired}`);
+check('Previous hash is recorded when trust expires', f?.previousSha256 === shaA, `prev=${f?.previousSha256?.slice(0, 12)}`);
+
+const trustAfter = await call('GET', `/api/blackbox/sites/${siteId}/files/trusted`);
+check('Expired trust entry is flagged, not silently kept', (trustAfter.body?.trusted ?? []).some((t) => t.relativePath === trustedPath && t.expired === true));
+
+/* ---------------------------------------------- notes + false positive */
+const noteOnly = inc ? await call('PATCH', `/api/blackbox/incidents/${inc.id}`, { note: 'Checked the plugin changelog; nothing matches.' }) : { status: 0 };
+check('Note can be added without changing status', noteOnly.status === 200 && noteOnly.body?.incident?.notes?.length === 1, `got ${noteOnly.status}`);
+check('Note keeps the previous status', noteOnly.body?.incident?.status === 'investigating', noteOnly.body?.incident?.status);
+
+const secondNote = inc ? await call('PATCH', `/api/blackbox/incidents/${inc.id}`, { note: 'Second note' }) : { status: 0 };
+check('Notes are append-only', secondNote.body?.incident?.notes?.length === 2, `len=${secondNote.body?.incident?.notes?.length}`);
+
+const fpNoReason = inc ? await call('PATCH', `/api/blackbox/incidents/${inc.id}`, { status: 'false_positive' }) : { status: 0 };
+check('False positive without a reason -> 400', fpNoReason.status === 400, `got ${fpNoReason.status}`);
+
+const fpWithReason = inc
+  ? await call('PATCH', `/api/blackbox/incidents/${inc.id}`, { status: 'false_positive', falsePositiveReason: 'Known plugin/theme behaviour' })
+  : { status: 0 };
+check('False positive with a reason accepted', fpWithReason.status === 200 && fpWithReason.body?.incident?.falsePositiveReason === 'Known plugin/theme behaviour', `got ${fpWithReason.status}`);
+
+/* ---------------------------------------------------------- audit log */
+const anonAudit = await fetch(BASE + '/api/blackbox/audit');
+check('Audit log requires a session', anonAudit.status === 401, `got ${anonAudit.status}`);
+
+const audit = await call('GET', '/api/blackbox/audit?limit=200');
+const actions = new Set((audit.body?.entries ?? []).map((e) => e.action));
+check('Audit log readable by an admin', audit.status === 200 && Array.isArray(audit.body?.entries));
+check('Audit records admin login', actions.has('login'), [...actions].join(','));
+check('Audit records site creation', (audit.body?.entries ?? []).some((e) => e.action === 'site_added' && e.siteId === siteId));
+check('Audit records incident status change', actions.has('incident_status') || actions.has('incident_note'), [...actions].join(','));
+check('Audit records false positives', actions.has('incident_false_positive'), [...actions].join(','));
+check('Audit records trusted-file changes', actions.has('trusted_file_added'), [...actions].join(','));
+
+const removeTrust = await call('DELETE', `/api/blackbox/sites/${siteId}/files/trusted?id=${addTrust.body?.trusted?.id}`);
+check('Trusted file can be removed', removeTrust.status === 200 && removeTrust.body?.removed === true, `got ${removeTrust.status}`);
+
+/* ------------------------------------------ rate limiting (in-memory) */
+const { hit } = await import('../../src/lib/blackbox/ratelimit.js');
+const rlKey = `unit:${unique()}`;
+const allowed = Array.from({ length: 300 }, () => hit(rlKey, 300, 60_000)).filter(Boolean).length;
+check('Collector limiter allows exactly 300 per window', allowed === 300, `allowed=${allowed}`);
+check('Collector limiter blocks the 301st request', hit(rlKey, 300, 60_000) === false);
+
+const afterMany = await call('POST', '/api/blackbox/heartbeat', { siteId, pluginVersion: '0.2.0' }, H2);
+check('Collector endpoints still work under the limit', afterMany.status === 200, `got ${afterMany.status}`);
+
 /* ------------------------------------------------------- cleanup */
 // Remove the throwaway site, otherwise every run leaves another
 // "API Suite" entry cluttering the dashboard.
 await call('DELETE', `/api/blackbox/sites/${siteId}?purge=true`);
+
+/* ------------------------------------------- opt-in: HTTP 429 proof
+ * These two prove the limits over the wire. They are opt-in because both are
+ * disruptive by design:
+ *   SCANSITE_TEST_RATELIMIT=1  sends 301 collector requests (slow)
+ *   SCANSITE_TEST_LOCKOUT=1    locks the admin login out for 15 minutes
+ * Run them deliberately, not on every pass.
+ */
+if (process.env.SCANSITE_TEST_RATELIMIT === '1') {
+  console.log('\nOpt-in: collector rate limit over HTTP');
+  const probe = await call('POST', '/api/blackbox/sites', { name: 'Rate limit probe', url: 'https://rate-limit-probe.example.com' });
+  const rlSite = probe.body?.site?.id;
+  const paired = await call('POST', '/api/blackbox/connect', { code: probe.body?.connection?.code, siteUrl: 'https://rate-limit-probe.example.com' });
+  const rlKey2 = paired.body?.collectorKey;
+  let blocked = 0;
+  for (let i = 0; i < 305; i++) {
+    const body = { site: rlSite, status: 'ok' };
+    const r = await call('POST', '/api/blackbox/heartbeat', body, signed(rlSite, rlKey2, body));
+    if (r.status === 429) blocked++;
+  }
+  check('Collector is throttled with 429 past the limit', blocked > 0, `429s=${blocked}`);
+  await call('DELETE', `/api/blackbox/sites/${rlSite}?purge=true`);
+} else {
+  console.log('\n(skipped HTTP rate-limit probe — set SCANSITE_TEST_RATELIMIT=1)');
+}
+
+if (process.env.SCANSITE_TEST_LOCKOUT === '1') {
+  console.log('\nOpt-in: login brute-force protection');
+  for (let i = 0; i < 5; i++) {
+    await fetch(BASE + '/api/blackbox/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: ADMIN_USER, password: 'deliberately-wrong' }),
+    });
+  }
+  const locked = await fetch(BASE + '/api/blackbox/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: ADMIN_USER, password: ADMIN_PASS }),
+  });
+  check('Correct password is refused while locked out', locked.status === 429, `got ${locked.status}`);
+  const lockedBody = await locked.json().catch(() => ({}));
+  check('Lockout says why', /too many|locked|try again/i.test(lockedBody?.error ?? ''), lockedBody?.error);
+} else {
+  console.log('\n(skipped brute-force probe — set SCANSITE_TEST_LOCKOUT=1; it locks the login for 15 min)');
+}
 
 /* ------------------------------------------------------- summary */
 console.log(`\n${pass}/${pass + fail} assertions passed (test site removed)`);

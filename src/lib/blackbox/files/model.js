@@ -6,7 +6,7 @@
  * and derives the analytics, levels and incident correlations shown in the UI.
  */
 
-import { upsertFile, addFileEventRef, updateSite } from "../storage";
+import { upsertFile, addFileEventRef, updateSite, findTrusted, expireTrusted } from "../storage";
 
 /** 0–100 risk → human level, kept separate from incident severity. */
 export function levelFor(risk) {
@@ -50,10 +50,23 @@ export async function recordFileEvidence(siteId, events) {
   for (const e of events) {
     const file = e.metadata?.file;
     if (file?.relativePath) {
-      await upsertFile(siteId, {
-        ...file,
-        path: e.path ?? `/${file.relativePath}`,
-      });
+      const record = { ...file, path: e.path ?? `/${file.relativePath}` };
+
+      // Trusted files: path + SHA-256. Trust expires the moment the hash changes.
+      const trusted = await findTrusted(siteId, file.relativePath);
+      if (trusted && !trusted.expired) {
+        if (trusted.sha256 === file.sha256) {
+          record.trusted = true;
+          record.integrityStatus = "verified";
+          record.riskScore = Math.min(record.riskScore ?? 0, 10);
+        } else {
+          await expireTrusted(trusted.id);
+          record.trusted = false;
+          record.trustedExpired = true;
+        }
+      }
+
+      await upsertFile(siteId, record);
       await addFileEventRef(siteId, file.relativePath, e.eventId);
     }
 

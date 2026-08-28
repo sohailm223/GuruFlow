@@ -1,7 +1,7 @@
 /**
  * Incident detector regression suite.
  *
- * These five scenarios are the calibration contract for the analysis engine:
+ * These scenarios are the calibration contract for the analysis engine:
  * if a collector or scoring change moves any of them into the wrong band, this
  * suite fails. It runs against a live ScanSite server.
  *
@@ -116,7 +116,7 @@ const scenarios = [
   },
   {
     name: 'Privilege escalation + backdoor',
-    expectTitle: 'Backdoor planted after privilege escalation',
+    expectTitle: 'Suspicious executable after privilege escalation',
     expectBand: 'CRITICAL',
     build: (t) => [
       { eventId: 'c1', type: 'administrator_created', category: 'user', timestamp: new Date(t - 8 * MINUTE).toISOString(), actor: { username: 'support_wp', role: 'administrator', ip: '198.51.100.23' }, target: { username: 'support_wp' }, changes: { to: 'administrator' } },
@@ -143,6 +143,32 @@ const scenarios = [
       { eventId: 'b1', type: 'login_failed_burst', category: 'auth', timestamp: new Date(t - 2 * MINUTE).toISOString(), target: { username: 'admin' }, count: 40, metadata: { windowMinutes: 5, ipCount: 7 } },
     ],
   },
+
+  /* ---- grouping: identity, not just timing ----
+   * These two pin the correlation behaviour. Both spread their events 45
+   * minutes apart, far beyond the 10-minute time gap, so ONLY the identity
+   * link can decide whether they land in one incident or two. */
+  {
+    name: 'Same actor links events 45 min apart',
+    expectTitle: 'Suspicious executable after privilege escalation',
+    expectBand: 'CRITICAL',
+    expectCount: 1,
+    build: (t) => [
+      { eventId: 'g1', type: 'administrator_created', category: 'user', timestamp: new Date(t - 45 * MINUTE).toISOString(), actor: { username: 'support_wp', role: 'administrator', ip: '198.51.100.23' }, target: { username: 'support_wp' }, changes: { to: 'administrator' } },
+      { eventId: 'g2', type: 'executable_created', category: 'file', timestamp: new Date(t).toISOString(), actor: { username: 'support_wp', role: 'administrator', ip: '198.51.100.23' }, path: '/wp-content/uploads/cache/x1.php', target: { name: 'x1.php', path: '/wp-content/uploads/cache/x1.php' }, metadata: { extension: '.php', executable: true } },
+    ],
+  },
+  {
+    name: 'Different actors 45 min apart stay separate',
+    expectTitle: 'Unexpected administrator account',
+    // A lone administrator_created (priv-esc weight 30) scores MEDIUM, not HIGH.
+    expectBand: 'MEDIUM',
+    expectCount: 2,
+    build: (t) => [
+      { eventId: 's1', type: 'administrator_created', category: 'user', timestamp: new Date(t - 45 * MINUTE).toISOString(), actor: { username: 'alice', role: 'administrator', ip: '198.51.100.10' }, target: { username: 'alice' }, changes: { to: 'administrator' } },
+      { eventId: 's2', type: 'administrator_created', category: 'user', timestamp: new Date(t).toISOString(), actor: { username: 'bob', role: 'administrator', ip: '203.0.113.77' }, target: { username: 'bob' }, changes: { to: 'administrator' } },
+    ],
+  },
 ];
 
 /* ------------------------------------------------------------------ run */
@@ -163,14 +189,18 @@ for (const s of scenarios) {
   const incidents = await incidentsFor(siteId);
   const top = incidents[0];
   // severity comes back lower-case from the API.
-  const ok = top && top.title === s.expectTitle && String(top.severity).toUpperCase() === s.expectBand;
+  const bandOk = !s.expectBand || String(top?.severity).toUpperCase() === s.expectBand;
+  const titleOk = top && top.title === s.expectTitle;
+  const countOk = s.expectCount === undefined || incidents.length === s.expectCount;
+  const ok = Boolean(bandOk && titleOk && countOk);
   console.log(
     `${ok ? '✓' : '✗'} ${s.name.padEnd(42)} → ${top ? `${top.severity} ${top.riskScore}/100 "${top.title}"` : 'no incident'}` +
-      (ok ? '' : `   (expected ${s.expectBand} "${s.expectTitle}")`)
+      (s.expectCount !== undefined ? ` [${incidents.length} incident${incidents.length === 1 ? '' : 's'}]` : '') +
+      (ok ? '' : `   (expected ${s.expectBand ?? 'any band'} "${s.expectTitle}"${s.expectCount !== undefined ? `, ${s.expectCount} incident(s)` : ''})`)
   );
   if (ok) pass++;
   else fail++;
-  detail.push({ scenario: s.name, expected: `${s.expectBand} ${s.expectTitle}`, actual: top ? `${top.severity} ${top.title}` : null, ok });
+  detail.push({ scenario: s.name, expected: `${s.expectBand ?? 'any'} ${s.expectTitle}`, actual: top ? `${top.severity} ${top.title}` : null, ok });
 }
 
 await cleanup();

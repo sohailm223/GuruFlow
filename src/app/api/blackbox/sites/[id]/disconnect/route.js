@@ -1,4 +1,5 @@
 import { json, fail } from "../../../_lib";
+import { recordAudit } from "@/lib/blackbox/storage";
 import { getSiteById, updateSite } from "@/lib/blackbox/storage";
 import { revokeCollectorKey } from "@/lib/blackbox/connection";
 
@@ -23,6 +24,7 @@ export async function POST(_req, { params }) {
     monitoringStatus: "inactive",
     disconnectedAt: Date.now(),
   });
+  await recordAudit({ action: "disconnect", siteId: id, name: site.name });
 
   return json({ site: updated, message: "Website disconnected. Existing incidents remain available." });
 }

@@ -2,7 +2,7 @@ import SeverityBadge from "./SeverityBadge";
 import RiskScore from "./RiskScore";
 
 const HEADLINE = {
-  critical: "Your website was probably compromised.",
+  critical: "Possible compromise detected — investigate.",
   high: "Something on your website needs attention.",
   medium: "Your website changed in a way worth checking.",
   low: "A small change was detected.",

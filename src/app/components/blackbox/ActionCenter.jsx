@@ -59,7 +59,7 @@ export default function ActionCenter({ top, topSite, now }) {
         </span>
 
         <h2 className="mt-4 text-2xl font-semibold tracking-tight text-white">
-          {topSite?.name ?? "A website"} may be compromised
+          Possible compromise on {topSite?.name ?? "a website"}
         </h2>
 
         {chain && (

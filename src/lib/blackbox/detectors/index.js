@@ -59,12 +59,12 @@ export function detectPrivEscBackdoor(events) {
     return {
       id: "priv-esc-then-backdoor",
       weight: 60,
-      title: "Backdoor planted after privilege escalation",
-      cause: `A new administrator account appeared and ${minutes} minutes later an executable PHP file was written into a data-only directory.`,
+      title: "Suspicious executable after privilege escalation",
+      cause: `A new administrator account appeared and ${minutes} minutes later an executable PHP file was written into a data-only directory. Without source-level review this is a possible compromise, not a confirmed one.`,
       summary: `An administrator account was created and ${minutes} minutes later an executable PHP file appeared inside uploads.`,
       concepts: {
         cause: "Suspected unauthorized administrator access",
-        change: "Executable PHP backdoor created",
+        change: "Unexpected executable created",
         persistence: first(byType(events, "cron_added"))
           ? "Suspicious cron registered"
           : undefined,
@@ -86,10 +86,10 @@ export function detectPrivEscBackdoor(events) {
     return {
       id: "webshell-upload",
       weight: 45,
-      title: "Executable file written into uploads",
-      cause: `A PHP file appeared at ${backdoor.path ?? backdoor.target?.path}. That directory should only ever hold images and documents, so this is very likely a webshell.`,
+      title: "Unexpected executable in uploads",
+      cause: `A PHP file appeared at ${backdoor.path ?? backdoor.target?.path}. That directory should only ever hold images and documents, so treat it as a suspicious executable and a possible compromise until reviewed.`,
       summary: "An executable PHP file was created in a directory that should never contain code.",
-      concepts: { cause: "Unknown file write", change: "Executable PHP backdoor created" },
+      concepts: { cause: "Unknown file write", change: "Unexpected executable created" },
       evidence: compact([ev(backdoor, "change", "Executable PHP appeared in uploads")]),
     };
   }
@@ -220,7 +220,7 @@ export function detectPersistence(events) {
     id: "persistence",
     weight: 20,
     title: "Persistence mechanism installed",
-    cause: "A cron job was scheduled in the same window as other suspicious activity — commonly how malware survives a cleanup.",
+    cause: "A cron job was scheduled in the same window as other suspicious activity — a common persistence pattern for unwanted code.",
     summary: "A scheduled job was registered alongside other suspicious changes.",
     concepts: { persistence: "Suspicious cron registered" },
     evidence: compact([ev(cron, "persistence", "Cron job registered")]),

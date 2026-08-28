@@ -1,5 +1,5 @@
 import { json, fail } from "../../../_lib";
-import { getSiteById, updateSite } from "@/lib/blackbox/storage";
+import { getSiteById, updateSite, recordAudit } from "@/lib/blackbox/storage";
 import { revokeCollectorKey, issueConnectionCode } from "@/lib/blackbox/connection";
 
 export const runtime = "nodejs";
@@ -23,6 +23,7 @@ export async function POST(_req, { params }) {
     connectionStatus: "pending",
     monitoringStatus: "inactive",
   });
+  await recordAudit({ action: "reconnect", siteId: id, name: site.name });
 
   return json({ site: updated, connection: pairing });
 }

@@ -5,7 +5,13 @@
  * evidence and falls when a competing explanation is nearly as strong.
  */
 
-export function confidenceFor({ findings, evidenceCount, eventCount }) {
+/**
+ * Confidence = strength of the EVIDENCE (how sure we are about the likely cause).
+ * Risk, separately, = seriousness. Confidence rises with detector strength,
+ * corroborating events, tight timing, and events tied to the same actor/IP/
+ * session, and falls when a competing explanation is nearly as strong.
+ */
+export function confidenceFor({ findings, evidenceCount, eventCount, correlation = 0, durationMinutes = 0 }) {
   const top = findings[0];
   if (!top) return 0;
 
@@ -14,6 +20,12 @@ export function confidenceFor({ findings, evidenceCount, eventCount }) {
 
   // More corroborating events in the same window -> more sure.
   confidence += Math.min(18, evidenceCount * 4);
+
+  // Events tied to the same actor / IP / session / target corroborate each other.
+  confidence += Math.min(12, correlation * 3);
+
+  // A tight burst reads more like one coordinated act than a slow drift.
+  if (eventCount >= 3 && durationMinutes <= 60) confidence += 4;
 
   // A very thin window is easier to misread.
   if (eventCount <= 2) confidence -= 15;

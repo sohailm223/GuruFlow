@@ -49,10 +49,12 @@ export default async function IncidentDetailPage({ params }) {
 
       <div className="rounded-xl border border-slate-200 bg-white px-6 py-4">
         <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">Status</p>
-        <IncidentStatusControl incidentId={incident.id} status={incident.status} />
-        {incident.statusNote && (
-          <p className="mt-3 text-sm text-slate-500">{incident.statusNote}</p>
-        )}
+        <IncidentStatusControl
+          incidentId={incident.id}
+          status={incident.status}
+          falsePositiveReason={incident.falsePositiveReason}
+          notes={incident.notes ?? []}
+        />
       </div>
 
       <LikelyCause incident={incident} />

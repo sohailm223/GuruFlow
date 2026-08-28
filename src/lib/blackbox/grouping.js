@@ -1,11 +1,17 @@
 /**
- * Incident grouping — unchanged in spirit from the original Black Box.
+ * Incident grouping.
  *
- * Events for one site are split into incidents by silence: a new incident
- * starts after `gapMinutes` of quiet, or once a window exceeds
- * `maxWindowHours`. Grouping stays time-based so it is predictable; the
- * detectors then explain each window.
+ * Events for one site are clustered into incidents by TWO links:
+ *   1. time   — events close together (<= gapMinutes) belong together, and
+ *   2. identity — events sharing a correlation key (actor / IP / user / account /
+ *      plugin / theme / cron hook / target) within the correlation window belong
+ *      together even if unrelated activity sits between them.
+ *
+ * When an event carries no correlation keys the time link is the only one that
+ * can fire, so behaviour degrades gracefully to the original time-based grouping.
  */
+
+import { correlationKeys } from "./correlation";
 
 export const GROUPING_DEFAULTS = {
   gapMinutes: 10,
@@ -18,28 +24,50 @@ export const GROUPING_DEFAULTS = {
  */
 export function groupIntoIncidents(events, opts = {}) {
   const { gapMinutes, maxWindowHours } = { ...GROUPING_DEFAULTS, ...opts };
+  const gapMs = gapMinutes * 60_000;
+  const windowMs = maxWindowHours * 3_600_000;
   const sorted = [...events].sort((a, b) => a.timestamp - b.timestamp);
+  const n = sorted.length;
 
-  const groups = [];
-  let current = null;
+  const parent = Array.from({ length: n }, (_, i) => i);
+  const find = (x) => {
+    while (parent[x] !== x) {
+      parent[x] = parent[parent[x]];
+      x = parent[x];
+    }
+    return x;
+  };
+  const union = (a, b) => {
+    parent[find(a)] = find(b);
+  };
 
-  for (const e of sorted) {
-    const last = current ? current[current.length - 1] : null;
-    const gap = last ? e.timestamp - last.timestamp : Infinity;
-    const span = current ? e.timestamp - current[0].timestamp : 0;
+  const keyLast = new Map(); // correlation key -> most recent index carrying it
 
-    const startsNew =
-      !current || gap > gapMinutes * 60_000 || span > maxWindowHours * 3_600_000;
+  for (let i = 0; i < n; i++) {
+    const e = sorted[i];
 
-    if (startsNew) {
-      current = [e];
-      groups.push(current);
-    } else {
-      current.push(e);
+    // Time link: chain to the immediately preceding event when close enough.
+    if (i > 0 && e.timestamp - sorted[i - 1].timestamp <= gapMs) union(i, i - 1);
+
+    // Identity link: join any earlier event within the window that shares a key.
+    const keys = correlationKeys(e);
+    for (const k of keys) {
+      const j = keyLast.get(k);
+      if (j !== undefined && e.timestamp - sorted[j].timestamp <= windowMs) union(i, j);
+      keyLast.set(k, i);
     }
   }
 
-  return groups;
+  const byRoot = new Map();
+  for (let i = 0; i < n; i++) {
+    const r = find(i);
+    if (!byRoot.has(r)) byRoot.set(r, []);
+    byRoot.get(r).push(sorted[i]);
+  }
+
+  return [...byRoot.values()]
+    .map((g) => g.sort((a, b) => a.timestamp - b.timestamp))
+    .sort((a, b) => a[0].timestamp - b[0].timestamp);
 }
 
 /**

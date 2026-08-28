@@ -18,8 +18,8 @@ export const runtime = "nodejs";
  * valid for event delivery afterwards.
  */
 export async function POST(req) {
-  const { ok, body, error } = await readJson(req);
-  if (!ok) return fail(400, error);
+  const { ok, body, error, status } = await readJson(req);
+  if (!ok) return fail(status ?? 400, error);
 
   const siteUrl = normalizeSiteUrl(body.siteUrl);
   if (!siteUrl) return fail(400, "Enter a valid website URL");
