@@ -32,7 +32,7 @@ export default async function FileInspectPage({ params }) {
           </p>
           <FileRiskBadge level={level} risk={file.riskScore} />
         </div>
-        <h1 className="mt-1 font-mono text-2xl font-semibold tracking-tight text-slate-900">{file.filename}</h1>
+        <h1 className="mt-1 font-mono text-2xl font-semibold tracking-tight text-slate-100">{file.filename}</h1>
         <p className="break-all font-mono text-sm text-slate-500">/{file.relativePath}</p>
 
         <div className="mt-4 grid grid-cols-2 gap-4 lg:grid-cols-4">

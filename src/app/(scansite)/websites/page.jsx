@@ -25,7 +25,7 @@ export default async function WebsitesPage() {
     <div className="space-y-6">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Websites</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-100">Websites</h1>
           <p className="mt-1 text-sm text-slate-500">
             Monitor every WordPress website from one place.
           </p>
@@ -40,7 +40,7 @@ export default async function WebsitesPage() {
 
       {cards.length === 0 ? (
         <div className="rounded-xl border border-slate-200 bg-white p-10 text-center">
-          <h2 className="text-lg font-semibold text-slate-900">No websites connected yet</h2>
+          <h2 className="text-lg font-semibold text-slate-100">No websites connected yet</h2>
           <p className="mx-auto mt-2 max-w-md text-sm text-slate-500">
             Connect a WordPress website to start recording what changes on it.
           </p>

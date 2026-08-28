@@ -16,7 +16,7 @@ export default async function IncidentsPage({ searchParams }) {
   return (
     <div className="space-y-6">
       <header>
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Black Box</h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-100">Black Box</h1>
         <p className="mt-1 text-sm text-slate-500">
           Understand exactly what changed, what broke and what probably caused it.
         </p>
@@ -28,7 +28,7 @@ export default async function IncidentsPage({ searchParams }) {
 
       {incidents.length === 0 ? (
         <div className="rounded-xl border border-slate-200 bg-white p-10 text-center">
-          <h2 className="text-lg font-semibold text-slate-900">No incidents found</h2>
+          <h2 className="text-lg font-semibold text-slate-100">No incidents found</h2>
           <p className="mx-auto mt-2 max-w-md text-sm text-slate-500">
             {allIncidents.length === 0 ? (
               <>

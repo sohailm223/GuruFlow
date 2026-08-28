@@ -43,7 +43,7 @@ export default async function WebsiteDetailPage({ params }) {
           ← Websites
         </Link>
         <div className="mt-2 flex flex-wrap items-center gap-3">
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">{site.name}</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-100">{site.name}</h1>
           <StatusDot tone={health.tone} label={health.label} />
         </div>
         <p className="mt-1 text-sm text-slate-500">{site.host}</p>

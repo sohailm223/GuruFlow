@@ -60,7 +60,7 @@ export default async function FilesPage({ params, searchParams }) {
           <Link href={`/websites/${id}`} className="text-sm text-slate-500 hover:text-slate-800">
             ← {site.name}
           </Link>
-          <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">File Integrity</h1>
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight text-slate-100">File Integrity</h1>
           <p className="mt-1 text-sm text-slate-500">
             See which WordPress files changed, which are expected, and which need inspection.
           </p>
