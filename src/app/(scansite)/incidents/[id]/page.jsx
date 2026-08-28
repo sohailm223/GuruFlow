@@ -25,9 +25,19 @@ export default async function IncidentDetailPage({ params }) {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <Link href="/incidents" className="text-sm text-slate-500 hover:text-slate-800">
-          ← Incidents
-        </Link>
+        <div className="flex flex-wrap items-center gap-3">
+          <Link href="/incidents" className="text-sm text-slate-500 hover:text-slate-800">
+            ← Incidents
+          </Link>
+          {site && (
+            <Link
+              href={`/websites/${site.id}/events?incident=${incident.id}`}
+              className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              View {incident.eventCount} raw event{incident.eventCount === 1 ? "" : "s"} →
+            </Link>
+          )}
+        </div>
         <p className="text-xs text-slate-400">
           {formatDay(incident.startedAt)} · {formatClock(incident.startedAt)} –{" "}
           {formatClock(incident.endedAt)} · {incident.id}

@@ -17,7 +17,7 @@
     {
       "name": "Pairing code accepted by ScanSite",
       "pass": true,
-      "detail": "siteId=site_fae4fe"
+      "detail": "siteId=site_fce0fa"
     },
     {
       "name": "Collector key stored in WordPress",
@@ -47,12 +47,12 @@
     {
       "name": "Connection screen renders",
       "pass": true,
-      "detail": "4865 bytes of HTML"
+      "detail": "4419 bytes of HTML"
     },
     {
       "name": "Heartbeat reaches ScanSite",
       "pass": true,
-      "detail": "lastSeenAt 1787911506461 -> 1787911508225"
+      "detail": "lastSeenAt 1787913089623 -> 1787913090469"
     },
     {
       "name": "Heartbeat reports real versions",
@@ -165,7 +165,7 @@
       "detected": "Yes",
       "payloadCorrect": "Yes",
       "duplicates": "No",
-      "notes": "username=test_admin role=administrator userId=3"
+      "notes": "username=test_admin role=administrator userId=8"
     },
     {
       "event": "logout",
@@ -213,7 +213,7 @@
       "detected": "Yes",
       "payloadCorrect": "Yes",
       "duplicates": "No",
-      "notes": "hook=lab_test_hook schedule=hourly nextRun=2026-08-28T11:05:19+00:00"
+      "notes": "hook=lab_test_hook schedule=hourly nextRun=2026-08-28T11:31:39+00:00"
     },
     {
       "event": "cron_removed",
@@ -229,7 +229,7 @@
       "detected": "Yes",
       "payloadCorrect": "Yes",
       "duplicates": "No",
-      "notes": "path=/.htaccess sha256=51527b0255d7… contents sent=no"
+      "notes": "path=/.htaccess sha256=c8dfe2e41088… contents sent=no"
     },
     {
       "event": "wp_config_modified",
@@ -237,7 +237,7 @@
       "detected": "Yes",
       "payloadCorrect": "Yes",
       "duplicates": "No",
-      "notes": "sha256=5e6c6502f400… secrets sent=no"
+      "notes": "sha256=fb9d63c6d569… secrets sent=no"
     },
     {
       "event": "executable_created",
@@ -317,7 +317,7 @@
       "detected": "Yes",
       "payloadCorrect": "Yes",
       "duplicates": "No",
-      "notes": "plugin_installed slug=lab-test-plugin name=Lab Test Plugin to=1.0.0 from=(none, correct) | all=cron_added,plugin_installed"
+      "notes": "plugin_installed slug=lab-test-plugin name=Lab Test Plugin to=1.0.0 from=(none, correct) | all=plugin_installed"
     },
     {
       "event": "plugin_updated",
@@ -452,12 +452,12 @@
     {
       "name": "admin_init file hashing stays cheap",
       "pass": true,
-      "detail": "91 ms"
+      "detail": "97 ms"
     },
     {
       "name": "No secret-like keys or values in real payloads",
       "pass": true,
-      "detail": "scanned 17 patterns across 1028 bytes"
+      "detail": "scanned 17 patterns across 1029 bytes"
     },
     {
       "name": "Cron args are not transmitted (count + hash only)",
@@ -472,12 +472,12 @@
     {
       "name": "Timestamps are ISO 8601 UTC",
       "pass": true,
-      "detail": "2026-08-28T10:06:49+00:00"
+      "detail": "2026-08-28T10:33:01+00:00"
     },
     {
       "name": "Server stores UTC (offset +00:00)",
       "pass": true,
-      "detail": "2026-08-28T10:06:49+00:00"
+      "detail": "2026-08-28T10:33:01+00:00"
     },
     {
       "name": "eventId is unique",
@@ -563,7 +563,7 @@
     },
     {
       "name": "admin_init (config + uploads hashing)",
-      "ms": 91
+      "ms": 97
     },
     {
       "name": "update_option with collector active",

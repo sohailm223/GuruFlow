@@ -80,6 +80,13 @@ export async function GET(req) {
     total,
     offset,
     limit,
+    // Header stats for the Explorer. Computed here rather than in the client so
+    // "today" is stable and no timestamp is derived during a render pass.
+    stats: {
+      eventsToday: working.filter((e) => e.timestamp >= startOfToday()).length,
+      lastEventAt: working.length ? working[0].timestamp : null,
+      totalAllTime: working.length,
+    },
     facets: {
       categories: facets(working, (e) => e.category),
       types: facets(working, (e) => e.type),
@@ -141,8 +148,13 @@ function incidentSummary(inc) {
   };
 }
 
-function facets(events, pick) {
-  const counts = new Map();
+/** Midnight local time, used for the "Events Today" header stat. */
+function startOfToday() {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+}
+
+function facets(events, pick) {  const counts = new Map();
   for (const e of events) {
     const key = pick(e);
     if (key == null || key === "") continue;
