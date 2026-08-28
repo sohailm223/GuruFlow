@@ -74,6 +74,7 @@ export const EVENT_TYPES = [
   "executable_created",
   "permission_changed",
   "files_changed",
+  "code_snapshot",
 
   // db
   "option_changed",
@@ -89,6 +90,7 @@ export const EVENT_TYPES = [
   "user_role_changed",
   "administrator_created",
   "password_reset",
+  "users_snapshot",
 
   // auth
   "login_success",
@@ -466,6 +468,16 @@ export function describeEvent(e) {
 
     case "collector_test":
       return e.metadata?.message || "Collector connection test";
+
+    case "users_snapshot": {
+      const users = e.metadata?.users ?? [];
+      const weak = users.filter((u) => u.weak).length;
+      return `User snapshot: ${users.length} account${users.length === 1 ? "" : "s"}, ${weak} weak`;
+    }
+    case "code_snapshot": {
+      const files = e.metadata?.files ?? [];
+      return `Code snapshot: ${files.length} file${files.length === 1 ? "" : "s"}`;
+    }
 
     default:
       return name ? `${e.type} — ${name}` : e.type;

@@ -75,6 +75,9 @@ class ScanSite_BB_Collector {
 			return;
 		}
 
+		// Daily, self-throttled users/code snapshots for the dashboard panels.
+		$this->events->maybe_send_snapshots();
+
 		$batch = ScanSite_BB_Events::take_batch();
 		if ( empty( $batch ) ) {
 			delete_option( self::OPT_ATTEMPTS );

@@ -1103,4 +1103,173 @@ class ScanSite_BB_Events {
 		$theme = wp_get_theme( $slug );
 		return $theme->exists() ? $theme->get( 'Name' ) : $slug;
 	}
+
+	/* ---------------------- users & code snapshots ---------------------- */
+
+	/** Snapshots are cheap to produce but noisy, so they go out once a day. */
+	const SNAPSHOT_INTERVAL = 86400;
+
+	/** Hard caps so a large site can never stall WP-Cron or flood the queue. */
+	const USERS_SNAP_MAX  = 15;
+	const CODE_FILE_MAX   = 8;
+	const CODE_FILE_BYTES = 8000;
+
+	/**
+	 * Short common-password list for the on-server weak-password audit. Only a
+	 * boolean "weak" flag ever leaves the site — never the password, never the
+	 * hash, and never which entry matched.
+	 *
+	 * @var string[]
+	 */
+	const COMMON_PASSWORDS = array(
+		'123456', '123456789', '12345678', '12345', '1234567', 'password',
+		'1234567890', 'qwerty', 'abc123', '111111', '123123', 'admin',
+		'letmein', 'welcome', 'monkey', 'dragon', 'iloveyou', 'sunshine',
+		'princess', 'football', 'charlie', 'aa123456', 'passw0rd', 'qwerty123',
+	);
+
+	/** Entry point called from the collector's cron flush. Self-throttling. */
+	public function maybe_send_snapshots() {
+		$this->maybe_send_users_snapshot();
+		$this->maybe_send_code_snapshot();
+	}
+
+	/**
+	 * Push a sanitised roster of accounts plus a per-account weak/strong flag
+	 * computed on-server. No password or hash ever leaves the site.
+	 */
+	public function maybe_send_users_snapshot() {
+		$now  = time();
+		$last = (int) get_option( 'scansite_blackbox_last_users_snapshot', 0 );
+		if ( ( $now - $last ) < self::SNAPSHOT_INTERVAL ) {
+			return;
+		}
+		update_option( 'scansite_blackbox_last_users_snapshot', $now, false );
+
+		if ( ! function_exists( 'get_users' ) ) {
+			return;
+		}
+
+		$users = get_users( array( 'orderby' => 'ID', 'order' => 'ASC' ) );
+		$rows  = array();
+		$audit = 0;
+
+		foreach ( $users as $user ) {
+			$roles = (array) $user->roles;
+
+			// Dictionary-testing is bounded to the first N accounts so a site
+			// with thousands of subscribers cannot stall the cron run.
+			$weak = null;
+			if ( $audit < self::USERS_SNAP_MAX ) {
+				$weak = $this->has_common_password( $user );
+				$audit++;
+			}
+
+			$rows[] = array(
+				'userId'      => (int) $user->ID,
+				'username'    => $user->user_login,
+				'email'       => $user->user_email,
+				'roles'       => $roles,
+				'isAdmin'     => in_array( 'administrator', $roles, true ),
+				'registered'  => $user->user_registered ? gmdate( 'c', strtotime( $user->user_registered ) ) : null,
+				'weak'        => $weak,
+				'predictable' => $this->predictable_username( $user->user_login ),
+			);
+		}
+
+		$this->enqueue(
+			'users_snapshot',
+			'user',
+			array(
+				'metadata' => array(
+					'total'   => count( $users ),
+					'audited' => $audit,
+					'users'   => $rows,
+				),
+			)
+		);
+	}
+
+	/**
+	 * On-server dictionary check. Returns true when the account's existing hash
+	 * matches a common password, false when it does not, null when the audit
+	 * could not run. wp_check_password() compares against the stored hash
+	 * locally — the plaintext candidate list never leaves and the hash never
+	 * leaves.
+	 *
+	 * @param WP_User $user
+	 * @return bool|null
+	 */
+	private function has_common_password( $user ) {
+		if ( empty( $user->user_pass ) || ! function_exists( 'wp_check_password' ) ) {
+			return null;
+		}
+		foreach ( self::COMMON_PASSWORDS as $candidate ) {
+			if ( wp_check_password( $candidate, $user->user_pass, $user->ID ) ) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private function predictable_username( $login ) {
+		$common = array( 'admin', 'administrator', 'root', 'test', 'user', 'wp', 'webmaster', 'demo' );
+		return in_array( strtolower( (string) $login ), $common, true );
+	}
+
+	/**
+	 * Push a read-only snapshot of the active theme's key templates and each
+	 * active plugin's main file, so the dashboard can show code without a
+	 * reverse channel. Contents are capped per file and per snapshot.
+	 */
+	public function maybe_send_code_snapshot() {
+		$now  = time();
+		$last = (int) get_option( 'scansite_blackbox_last_code_snapshot', 0 );
+		if ( ( $now - $last ) < self::SNAPSHOT_INTERVAL ) {
+			return;
+		}
+		update_option( 'scansite_blackbox_last_code_snapshot', $now, false );
+
+		$files = array();
+
+		$theme_dir = function_exists( 'get_template_directory' ) ? get_template_directory() : null;
+		if ( $theme_dir && is_dir( $theme_dir ) ) {
+			foreach ( array( 'functions.php', 'style.css', 'header.php', 'footer.php', 'index.php' ) as $rel ) {
+				$this->push_code_file( $files, $theme_dir . '/' . $rel, 'theme/' . $rel );
+			}
+		}
+
+		foreach ( (array) get_option( 'active_plugins', array() ) as $plugin_file ) {
+			if ( count( $files ) >= self::CODE_FILE_MAX ) {
+				break;
+			}
+			$this->push_code_file( $files, WP_PLUGIN_DIR . '/' . $plugin_file, 'plugin/' . $plugin_file );
+		}
+
+		$this->enqueue(
+			'code_snapshot',
+			'file',
+			array( 'metadata' => array( 'files' => $files ) )
+		);
+	}
+
+	private function push_code_file( &$files, $path, $label ) {
+		if ( count( $files ) >= self::CODE_FILE_MAX ) {
+			return;
+		}
+		if ( ! is_readable( $path ) ) {
+			return;
+		}
+		$size    = (int) filesize( $path );
+		$content = file_get_contents( $path, false, null, 0, self::CODE_FILE_BYTES );
+		if ( false === $content ) {
+			return;
+		}
+		$files[] = array(
+			'path'      => $label,
+			'bytes'     => $size,
+			'truncated' => $size > self::CODE_FILE_BYTES,
+			'content'   => $content,
+		);
+	}
 }

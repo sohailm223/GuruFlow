@@ -8,6 +8,8 @@ import IncidentCard from "@/app/components/blackbox/IncidentCard";
 import ConnectionPanel from "@/app/components/blackbox/ConnectionPanel";
 import WebsiteEnvironment from "@/app/components/blackbox/WebsiteEnvironment";
 import RecentActivity from "@/app/components/blackbox/RecentActivity";
+import UsersPanel from "@/app/components/blackbox/UsersPanel";
+import CodeBrowser from "@/app/components/blackbox/CodeBrowser";
 
 export const dynamic = "force-dynamic";
 
@@ -19,11 +21,15 @@ export default async function WebsiteDetailPage({ params }) {
 
   const [incidents, events] = await Promise.all([
     getIncidentsBySite(id, 100),
-    getEventsBySite(id, 30),
+    getEventsBySite(id, 200),
   ]);
 
   const health = connectionHealth(site);
   const stats = await getSiteStats(id, incidents);
+
+  // Newest-first, so the first match is the latest snapshot.
+  const usersSnapshot = events.find((e) => e.type === "users_snapshot") ?? null;
+  const codeSnapshot = events.find((e) => e.type === "code_snapshot") ?? null;
 
   return (
     <div className="space-y-8">
@@ -70,6 +76,20 @@ export default async function WebsiteDetailPage({ params }) {
             ))}
           </div>
         )}
+      </section>
+
+      <section>
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
+          Users &amp; Password Health
+        </h2>
+        <UsersPanel snapshot={usersSnapshot} />
+      </section>
+
+      <section>
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
+          Theme &amp; Plugin Code
+        </h2>
+        <CodeBrowser snapshot={codeSnapshot} />
       </section>
 
       <section>
