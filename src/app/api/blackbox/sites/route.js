@@ -1,5 +1,5 @@
 import { json, fail, readJson } from "../_lib";
-import { getSites } from "@/lib/blackbox/storage";
+import { getSites, storageInfo } from "@/lib/blackbox/storage";
 import { createSiteRecord, normalizeSiteUrl } from "@/lib/blackbox/sites";
 import { issueConnectionCode } from "@/lib/blackbox/connection";
 import { createSite } from "@/lib/blackbox/storage";
@@ -7,10 +7,16 @@ import { createSite } from "@/lib/blackbox/storage";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/** GET /api/blackbox/sites — list every website. */
+/**
+ * GET /api/blackbox/sites — list every website.
+ *
+ * Also reports which storage driver is live. On a read-only filesystem the
+ * store silently falls back to memory, and that is invisible from the UI — so
+ * it is surfaced here to make a bad deployment obvious instead of mysterious.
+ */
 export async function GET() {
   const sites = await getSites();
-  return json({ sites });
+  return json({ sites, storage: storageInfo() });
 }
 
 /**
