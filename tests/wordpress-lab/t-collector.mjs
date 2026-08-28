@@ -71,12 +71,18 @@ lab_dump('has', array(
   'lastError'   => false !== strpos( $html, 'Last delivery error' ),
   'secret'      => false !== strpos( $html, ScanSite_BB_Connection::collector_key() ),
   'formInP'     => (bool) preg_match( '/<p>\\s*<form/i', $html ),
+  'hero'        => false !== strpos( $html, 'scansite-bb-hero' ),
+  'pill'        => false !== strpos( $html, 'scansite-bb-pill--' ),
+  // Count rendered tiles, not the CSS rules that mention the same class.
+  'tiles'       => preg_match_all( '/<div class="scansite-bb-stat__v">/', $html ),
+  'styles'      => false !== strpos( $html, 'scansite-bb-hero{' ),
 ) );`, { admin: true });
   const has = screen.markers.has || {};
   note('queue', 'Admin screen shows diagnostics UI', has.diagnostics && has.runDiag && has.sendTest && has.retry, `diagnostics=${has.diagnostics} runDiag=${has.runDiag} sendTest=${has.sendTest} retry=${has.retry}`);
   note('queue', 'Admin screen shows queue, signing, last error', has.queue && has.signing && has.lastError, `queue=${has.queue} signing=${has.signing} lastError=${has.lastError}`);
   note('queue', 'Admin screen never prints the secret', has.secret === false, `secretPresent=${has.secret}`);
   note('queue', 'No <form> nested inside <p>', has.formInP === false, `formInP=${has.formInP}`);
+  note('queue', 'Status panel renders with styles, pill and 4 tiles', has.hero && has.styles && has.pill && has.tiles === 4, `hero=${has.hero} styles=${has.styles} pill=${has.pill} tiles=${has.tiles}`);
 
   /* ------------------------------------------- queue limit policy */
   console.log('\n--- queue limit ---');

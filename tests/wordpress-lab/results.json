@@ -17,7 +17,7 @@
     {
       "name": "Pairing code accepted by ScanSite",
       "pass": true,
-      "detail": "siteId=site_fce0fa"
+      "detail": "siteId=site_2ce9c4"
     },
     {
       "name": "Collector key stored in WordPress",
@@ -47,12 +47,12 @@
     {
       "name": "Connection screen renders",
       "pass": true,
-      "detail": "4419 bytes of HTML"
+      "detail": "8395 bytes of HTML"
     },
     {
       "name": "Heartbeat reaches ScanSite",
       "pass": true,
-      "detail": "lastSeenAt 1787913089623 -> 1787913090469"
+      "detail": "lastSeenAt 1787913771720 -> 1787913772526"
     },
     {
       "name": "Heartbeat reports real versions",
@@ -165,7 +165,7 @@
       "detected": "Yes",
       "payloadCorrect": "Yes",
       "duplicates": "No",
-      "notes": "username=test_admin role=administrator userId=8"
+      "notes": "username=test_admin role=administrator userId=18"
     },
     {
       "event": "logout",
@@ -213,7 +213,7 @@
       "detected": "Yes",
       "payloadCorrect": "Yes",
       "duplicates": "No",
-      "notes": "hook=lab_test_hook schedule=hourly nextRun=2026-08-28T11:31:39+00:00"
+      "notes": "hook=lab_test_hook schedule=hourly nextRun=2026-08-28T11:43:00+00:00"
     },
     {
       "event": "cron_removed",
@@ -229,7 +229,7 @@
       "detected": "Yes",
       "payloadCorrect": "Yes",
       "duplicates": "No",
-      "notes": "path=/.htaccess sha256=c8dfe2e41088… contents sent=no"
+      "notes": "path=/.htaccess sha256=e605755811d4… contents sent=no"
     },
     {
       "event": "wp_config_modified",
@@ -237,7 +237,7 @@
       "detected": "Yes",
       "payloadCorrect": "Yes",
       "duplicates": "No",
-      "notes": "sha256=fb9d63c6d569… secrets sent=no"
+      "notes": "sha256=73b8a1cabfe6… secrets sent=no"
     },
     {
       "event": "executable_created",
@@ -390,6 +390,11 @@
       "detail": "formInP=false"
     },
     {
+      "name": "Status panel renders with styles, pill and 4 tiles",
+      "pass": true,
+      "detail": "hero=true styles=true pill=true tiles=4"
+    },
+    {
       "name": "Queue is capped at MAX_QUEUE",
       "pass": true,
       "detail": "size=1000 max=1000"
@@ -452,7 +457,7 @@
     {
       "name": "admin_init file hashing stays cheap",
       "pass": true,
-      "detail": "97 ms"
+      "detail": "96 ms"
     },
     {
       "name": "No secret-like keys or values in real payloads",
@@ -472,12 +477,12 @@
     {
       "name": "Timestamps are ISO 8601 UTC",
       "pass": true,
-      "detail": "2026-08-28T10:33:01+00:00"
+      "detail": "2026-08-28T10:44:22+00:00"
     },
     {
       "name": "Server stores UTC (offset +00:00)",
       "pass": true,
-      "detail": "2026-08-28T10:33:01+00:00"
+      "detail": "2026-08-28T10:44:22+00:00"
     },
     {
       "name": "eventId is unique",
@@ -559,15 +564,15 @@
   "performance": [
     {
       "name": "wp_insert_user with collector active",
-      "ms": 138
+      "ms": 137
     },
     {
       "name": "admin_init (config + uploads hashing)",
-      "ms": 97
+      "ms": 96
     },
     {
       "name": "update_option with collector active",
-      "ms": 3
+      "ms": 4
     },
     {
       "name": "enqueue one event (no network)",

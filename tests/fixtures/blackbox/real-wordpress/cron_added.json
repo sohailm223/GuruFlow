@@ -1,9 +1,9 @@
 {
-  "eventId": "evt_bfe032cbe9c7daaa",
+  "eventId": "evt_cdf73d659f11badf",
   "siteId": "site_example000000",
   "category": "cron",
   "type": "cron_added",
-  "timestamp": 1787913183000,
+  "timestamp": 1787913864000,
   "severityHint": null,
   "actor": {
     "userId": 1,
@@ -17,13 +17,13 @@
   },
   "metadata": {
     "schedule": "hourly",
-    "nextRun": "2026-08-28T11:33:03+00:00",
+    "nextRun": "2026-08-28T11:44:24+00:00",
     "argCount": 0,
     "argsHash": null
   },
-  "receivedAt": 1787913183863,
+  "receivedAt": 1787913864383,
   "incident": {
-    "id": "inc_924a01079df3",
+    "id": "inc_ca2f83dbe329",
     "title": "Backdoor planted after privilege escalation",
     "severity": "critical",
     "riskScore": 100,

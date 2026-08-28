@@ -2,7 +2,7 @@
  * Read helpers shared by the dashboard pages.
  */
 
-import { getSites, getIncidents, getIncidentsBySite } from "./storage";
+import { getSites, getIncidents, getIncidentsBySite, getEvents } from "./storage";
 import { connectionHealth } from "./sites";
 
 /**
@@ -26,8 +26,17 @@ export async function getSiteStats(siteId, incidents) {
 
 /** Overview counters. */
 export async function getOverview() {
-  const [sites, incidents] = await Promise.all([getSites(), getIncidents(500)]);
+  const [sites, incidents, events] = await Promise.all([
+    getSites(),
+    getIncidents(500),
+    getEvents(5000),
+  ]);
   const now = Date.now();
+
+  // Computed here rather than in a component so nothing reads the clock during
+  // a render pass.
+  const dayStart = new Date();
+  const todayFrom = new Date(dayStart.getFullYear(), dayStart.getMonth(), dayStart.getDate()).getTime();
 
   const withHealth = sites.map((site) => ({
     site,
@@ -48,6 +57,15 @@ export async function getOverview() {
       healthy: withHealth.filter((s) => s.health.key === "connected").length,
       needsAttention: withHealth.filter((s) => s.health.key === "issue").length,
       critical: criticalSites.size,
+    },
+    activity: {
+      // Passed to the UI so relative ages are computed from a fixed reference
+      // rather than a clock read during render.
+      now,
+      eventsToday: events.filter((e) => e.timestamp >= todayFrom).length,
+      totalEvents: events.length,
+      lastEventAt: events.length ? Math.max(...events.map((e) => e.timestamp)) : null,
+      openIncidents: incidents.filter((i) => !["resolved", "false_positive"].includes(i.status)).length,
     },
   };
 }

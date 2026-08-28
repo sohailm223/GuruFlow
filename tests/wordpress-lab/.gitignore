@@ -5,3 +5,6 @@
 /node_modules/
 *.sqlite
 *.sqlite-journal
+
+# Rendered UI previews (regenerated, not source).
+.preview/

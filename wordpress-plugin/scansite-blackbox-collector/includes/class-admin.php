@@ -159,9 +159,9 @@ class ScanSite_BB_Admin {
 		?>
 		<div class="wrap">
 			<h1><?php esc_html_e( 'ScanSite Black Box', 'scansite-blackbox' ); ?></h1>
-			<p class="description">
-				<?php esc_html_e( 'Protect your website with complete change and incident visibility.', 'scansite-blackbox' ); ?>
-			</p>
+
+			<?php $this->render_styles(); ?>
+			<?php $this->render_hero(); ?>
 
 			<?php foreach ( $notices as $notice ) : ?>
 				<div class="notice notice-<?php echo esc_attr( $notice['type'] ); ?>">
@@ -313,6 +313,165 @@ class ScanSite_BB_Admin {
 	 * Diagnostics results, queue inspector, cron status and last delivery error.
 	 * Values shown are metadata only — never the collector secret.
 	 */
+	/**
+	 * Scoped styles for the status panel.
+	 *
+	 * Kept inline and namespaced rather than enqueued: this renders on a single
+	 * admin screen, and an extra request for a few rules is not worth it.
+	 */
+	private function render_styles() {
+		?>
+		<style>
+			.scansite-bb-hero{
+				position:relative;overflow:hidden;margin:16px 0 24px;
+				border-radius:14px;color:#e2e8f0;
+				background:linear-gradient(135deg,#0f172a 0%,#134e4a 55%,#0f766e 100%);
+				box-shadow:0 10px 30px -12px rgba(15,23,42,.55);
+			}
+			.scansite-bb-hero:after{
+				content:"";position:absolute;inset:0;pointer-events:none;
+				background:radial-gradient(620px 220px at 88% -20%,rgba(45,212,191,.28),transparent 70%);
+			}
+			.scansite-bb-hero__inner{position:relative;z-index:1;padding:22px 24px}
+			.scansite-bb-hero__top{display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:14px}
+			.scansite-bb-pill{
+				display:inline-flex;align-items:center;gap:8px;
+				padding:6px 14px;border-radius:999px;
+				font-size:12px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;
+			}
+			.scansite-bb-pill i{width:8px;height:8px;border-radius:50%;background:currentColor;display:block}
+			.scansite-bb-pill--ok{background:rgba(45,212,191,.16);color:#5eead4;box-shadow:inset 0 0 0 1px rgba(94,234,212,.32)}
+			.scansite-bb-pill--err{background:rgba(248,113,113,.16);color:#fca5a5;box-shadow:inset 0 0 0 1px rgba(252,165,165,.32)}
+			.scansite-bb-pill--idle{background:rgba(148,163,184,.18);color:#cbd5e1;box-shadow:inset 0 0 0 1px rgba(203,213,225,.28)}
+			.scansite-bb-tag{margin:12px 0 0;max-width:56ch;font-size:14px;line-height:1.6;color:#94a3b8}
+			.scansite-bb-tag strong{color:#f1f5f9;font-weight:600}
+			.scansite-bb-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));gap:10px;margin-top:20px}
+			.scansite-bb-stat{
+				padding:12px 14px;border-radius:11px;
+				background:rgba(255,255,255,.06);box-shadow:inset 0 0 0 1px rgba(255,255,255,.09);
+			}
+			.scansite-bb-stat__k{font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:#7dd3c8}
+			.scansite-bb-stat__v{margin-top:5px;font-size:19px;font-weight:700;color:#f8fafc;font-variant-numeric:tabular-nums}
+			.scansite-bb-stat--warn .scansite-bb-stat__v{color:#fca5a5}
+			.scansite-bb-meta{
+				display:flex;flex-wrap:wrap;gap:8px 18px;margin-top:18px;padding-top:16px;
+				border-top:1px solid rgba(255,255,255,.1);font-size:12px;color:#94a3b8;
+			}
+			.scansite-bb-meta code{background:rgba(255,255,255,.08);color:#cbd5e1;padding:1px 6px;border-radius:5px;font-size:11px}
+			.scansite-bb-meta b{color:#cbd5e1;font-weight:600}
+			@media screen and (max-width:600px){
+				.scansite-bb-hero__inner{padding:18px}
+				.scansite-bb-stat__v{font-size:17px}
+			}
+		</style>
+		<?php
+	}
+
+	/**
+	 * The status panel shown at the top of the settings screen.
+	 *
+	 * Shows operational state only — the collector key is never rendered here or
+	 * anywhere else on this screen.
+	 */
+	private function render_hero() {
+		$status = ScanSite_BB_Diagnostics::status();
+		$state  = (string) $status['state'];
+
+		$tone = 'idle';
+		if ( 'connected' === $state ) {
+			$tone = 'ok';
+		} elseif ( 'error' === $state ) {
+			$tone = 'err';
+		}
+
+		$failed = (int) $status['failedDeliveries'];
+
+		$tiles = array(
+			array(
+				'key'   => __( 'Queued events', 'scansite-blackbox' ),
+				'value' => number_format_i18n( (int) $status['queuedEvents'] ),
+				'warn'  => false,
+			),
+			array(
+				'key'   => __( 'Last delivery', 'scansite-blackbox' ),
+				'value' => $this->ago( (int) $status['lastDelivery'] ),
+				'warn'  => false,
+			),
+			array(
+				'key'   => __( 'Failed deliveries', 'scansite-blackbox' ),
+				'value' => number_format_i18n( $failed ),
+				'warn'  => $failed > 0,
+			),
+			array(
+				'key'   => __( 'Heartbeat', 'scansite-blackbox' ),
+				'value' => $this->ago( (int) $status['lastHeartbeat'] ),
+				'warn'  => false,
+			),
+		);
+
+		$meta = array_filter(
+			array(
+				$status['siteId'] ? __( 'Site ID', 'scansite-blackbox' ) . ' <code>' . esc_html( $status['siteId'] ) . '</code>' : '',
+				$status['endpoint'] ? __( 'Endpoint', 'scansite-blackbox' ) . ' <code>' . esc_html( $status['endpoint'] ) . '</code>' : '',
+				$status['collectorVersion'] ? '<b>' . esc_html__( 'Collector', 'scansite-blackbox' ) . '</b> ' . esc_html( $status['collectorVersion'] ) : '',
+				$status['wordpressVersion'] ? '<b>' . esc_html__( 'WordPress', 'scansite-blackbox' ) . '</b> ' . esc_html( $status['wordpressVersion'] ) : '',
+				'<b>' . esc_html__( 'PHP', 'scansite-blackbox' ) . '</b> ' . esc_html( $status['phpVersion'] ),
+			)
+		);
+		?>
+		<div class="scansite-bb-hero">
+			<div class="scansite-bb-hero__inner">
+				<div class="scansite-bb-hero__top">
+					<span class="scansite-bb-pill scansite-bb-pill--<?php echo esc_attr( $tone ); ?>">
+						<i aria-hidden="true"></i><?php echo esc_html( $this->state_label( $state ) ); ?>
+					</span>
+				</div>
+
+				<?php if ( 'connected' === $state ) : ?>
+					<p class="scansite-bb-tag">
+						<strong><?php esc_html_e( 'Streaming change and incident data to ScanSite.', 'scansite-blackbox' ); ?></strong>
+						<?php esc_html_e( 'Logins, plugin and theme changes, new administrators, cron jobs and suspicious file writes are captured and explained.', 'scansite-blackbox' ); ?>
+					</p>
+				<?php else : ?>
+					<p class="scansite-bb-tag">
+						<strong><?php esc_html_e( 'Not connected yet.', 'scansite-blackbox' ); ?></strong>
+						<?php esc_html_e( 'Add this website in the ScanSite dashboard and paste the pairing code below to start collecting events.', 'scansite-blackbox' ); ?>
+					</p>
+				<?php endif; ?>
+
+				<div class="scansite-bb-stats">
+					<?php foreach ( $tiles as $tile ) : ?>
+						<div class="scansite-bb-stat<?php echo $tile['warn'] ? ' scansite-bb-stat--warn' : ''; ?>">
+							<div class="scansite-bb-stat__k"><?php echo esc_html( $tile['key'] ); ?></div>
+							<div class="scansite-bb-stat__v"><?php echo esc_html( $tile['value'] ); ?></div>
+						</div>
+					<?php endforeach; ?>
+				</div>
+
+				<div class="scansite-bb-meta">
+					<?php foreach ( $meta as $item ) : ?>
+						<span><?php echo wp_kses_post( $item ); ?></span>
+					<?php endforeach; ?>
+				</div>
+			</div>
+		</div>
+		<?php
+	}
+
+	/** Human-readable age of a Unix timestamp, or "Never". */
+	private function ago( $timestamp ) {
+		$timestamp = (int) $timestamp;
+		if ( $timestamp < 1 ) {
+			return __( 'Never', 'scansite-blackbox' );
+		}
+
+		return sprintf(
+			/* translators: %s: human-readable time difference, e.g. "3 mins" */
+			__( '%s ago', 'scansite-blackbox' ),
+			human_time_diff( $timestamp, time() )
+		);
+	}
+
 	private function render_diagnostics() {
 		$status = ScanSite_BB_Diagnostics::status();
 		$saved  = get_option( 'scansite_blackbox_last_diagnostics', array() );

@@ -3,40 +3,26 @@ import { getOverview } from "@/lib/blackbox/dashboard";
 import StatusDot from "@/app/components/blackbox/StatusDot";
 import IncidentCard from "@/app/components/blackbox/IncidentCard";
 import DemoLoader from "@/app/components/blackbox/DemoLoader";
+import HeroPanel from "@/app/components/blackbox/HeroPanel";
 
 export const dynamic = "force-dynamic";
 
 export default async function OverviewPage() {
-  const { sites, incidents, counts } = await getOverview();
+  const { sites, incidents, counts, activity } = await getOverview();
   const siteNames = new Map(sites.map((s) => [s.site.id, s.site.name]));
 
   return (
     <div className="space-y-8">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Overview</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Know exactly what happened to your website.
-          </p>
-        </div>
-        <Link
-          href="/websites/add"
-          className="rounded-lg bg-teal-700 px-4 py-2 text-sm font-medium text-white transition hover:bg-teal-800"
-        >
-          + Add Website
-        </Link>
+      <header>
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Overview</h1>
       </header>
+
+      <HeroPanel counts={counts} activity={activity} now={activity.now} />
 
       {sites.length === 0 ? (
         <FirstRun />
       ) : (
         <>
-          <section className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-            <Stat label="Connected Websites" value={counts.connected} />
-            <Stat label="Healthy" value={counts.healthy} />
-            <Stat label="Needs Attention" value={counts.needsAttention} tone="warn" />
-            <Stat label="Critical" value={counts.critical} tone="bad" />
-          </section>
 
           <section>
             <div className="mb-3 flex items-baseline justify-between">
@@ -102,18 +88,6 @@ export default async function OverviewPage() {
           </div>
         </section>
       )}
-    </div>
-  );
-}
-
-function Stat({ label, value, tone }) {
-  const colour =
-    tone === "bad" ? "text-rose-600" : tone === "warn" ? "text-amber-600" : "text-slate-900";
-
-  return (
-    <div className="rounded-xl border border-slate-200 bg-white p-5">
-      <p className="text-xs uppercase tracking-wide text-slate-400">{label}</p>
-      <p className={`mt-2 text-3xl font-semibold tabular-nums ${colour}`}>{value}</p>
     </div>
   );
 }

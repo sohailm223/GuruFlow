@@ -1,9 +1,9 @@
 {
-  "eventId": "evt_2d2b5d14876ce93d",
+  "eventId": "evt_f39858e9aeafb61d",
   "siteId": "site_example000000",
   "category": "plugin",
   "type": "plugin_activated",
-  "timestamp": 1787913183000,
+  "timestamp": 1787913864000,
   "severityHint": null,
   "actor": {
     "userId": 1,
@@ -16,9 +16,9 @@
     "name": "Lab Test Plugin"
   },
   "metadata": [],
-  "receivedAt": 1787913183863,
+  "receivedAt": 1787913864383,
   "incident": {
-    "id": "inc_924a01079df3",
+    "id": "inc_ca2f83dbe329",
     "title": "Backdoor planted after privilege escalation",
     "severity": "critical",
     "riskScore": 100,
