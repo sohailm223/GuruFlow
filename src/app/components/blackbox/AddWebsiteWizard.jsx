@@ -67,6 +67,7 @@ export default function AddWebsiteWizard({ defaultEndpoint }) {
   const startPolling = () => {
     clearInterval(pollRef.current);
     pollRef.current = setInterval(async () => {
+      if (!site?.id) return;
       const res = await fetch(`/api/blackbox/sites/${site.id}`);
       if (!res.ok) return;
       const data = await res.json();
@@ -79,6 +80,7 @@ export default function AddWebsiteWizard({ defaultEndpoint }) {
   };
 
   const runVerification = async () => {
+    if (!site?.id) return;
     setVerifyBusy(true);
     setError("");
 
