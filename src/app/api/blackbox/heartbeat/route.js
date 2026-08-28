@@ -41,6 +41,12 @@ export async function POST(req) {
     await updateSite(auth.site.id, { pendingScan: null });
   }
 
+  // Key rotation is requested until the plugin confirms it via /rotate, so a
+  // missed heartbeat does not lose the instruction.
+  if (auth.connection?.pendingRotate) {
+    command.rotateKey = true;
+  }
+
   return json({
     success: true,
     siteId: auth.site.id,

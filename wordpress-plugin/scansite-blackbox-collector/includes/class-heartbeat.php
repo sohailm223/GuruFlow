@@ -104,6 +104,13 @@ class ScanSite_BB_Heartbeat {
 					$collector->fim->request_scan( $body['command']['scan'] );
 				}
 			}
+
+			// A dashboard-requested key rotation: generate a fresh key locally
+			// and push it back. Self-healing — retried on the next heartbeat if
+			// it fails, until ScanSite confirms and clears the flag.
+			if ( is_array( $body ) && ! empty( $body['command']['rotateKey'] ) ) {
+				ScanSite_BB_Connection::rotate_key();
+			}
 			return;
 		}
 

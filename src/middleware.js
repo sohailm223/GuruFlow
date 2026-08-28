@@ -1,22 +1,27 @@
 import { NextResponse } from "next/server";
-import { gateEnabled, verifySession, GATE_COOKIE } from "@/lib/blackbox/gate";
+import { adminConfigured, verifySession, GATE_COOKIE } from "@/lib/blackbox/gate";
 
 /**
- * Collector-facing endpoints authenticate with the per-site collector key (or
- * a single-use pairing code), so they must stay reachable even when the
- * dashboard gate is on. Everything else — pages and read APIs — is gated.
+ * Dashboard authentication is MANDATORY.
+ *
+ * Collector-facing endpoints authenticate with the per-site collector key plus
+ * a required HMAC request signature, so they stay reachable without an admin
+ * session. Everything else — pages and management APIs — requires a valid
+ * session cookie.
+ *
+ * When no admin password is configured the dashboard fails CLOSED: pages are
+ * sent to /login (which explains the required env var) and APIs return 401.
  */
 const OPEN_API = new Set([
   "/api/blackbox/ingest",
   "/api/blackbox/heartbeat",
-  "/api/blackbox/connect",
   "/api/blackbox/verify",
+  "/api/blackbox/connect",
+  "/api/blackbox/rotate",
   "/api/blackbox/login",
 ]);
 
 export async function middleware(req) {
-  if (!gateEnabled()) return NextResponse.next();
-
   const { pathname } = req.nextUrl;
   if (OPEN_API.has(pathname) || pathname === "/login") return NextResponse.next();
 
@@ -25,12 +30,17 @@ export async function middleware(req) {
   }
 
   if (pathname.startsWith("/api/")) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json(
+      { error: adminConfigured() ? "Unauthorized" : "Admin credentials not configured" },
+      { status: 401 },
+    );
   }
 
   const url = req.nextUrl.clone();
   url.pathname = "/login";
-  url.search = `?next=${encodeURIComponent(pathname)}`;
+  url.search = adminConfigured()
+    ? `?next=${encodeURIComponent(pathname)}`
+    : `?setup=1&next=${encodeURIComponent(pathname)}`;
   return NextResponse.redirect(url);
 }
 

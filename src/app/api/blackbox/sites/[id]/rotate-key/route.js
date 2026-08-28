@@ -1,18 +1,17 @@
 import { json, fail } from "../../../_lib";
 import { getSiteById } from "@/lib/blackbox/storage";
-import { rotateCollectorKey } from "@/lib/blackbox/connection";
+import { requestKeyRotation } from "@/lib/blackbox/connection";
 
 export const runtime = "nodejs";
 
 /**
  * POST /api/blackbox/sites/:id/rotate-key
  *
- * Issues a new permanent collector secret and returns it exactly once.
- *
- * The old key stops working immediately, so the WordPress side must be
- * updated. Automatic rotation sync (ScanSite issues a rotation token that
- * WordPress exchanges) is not implemented in this MVP — the response carries
- * explicit reconnection instructions rather than silently breaking the site.
+ * Dashboard-initiated rotation. ScanSite never generates or returns the raw
+ * secret: this only flags the connection. The next collector heartbeat receives
+ * `command.rotateKey`, the WordPress plugin generates a fresh key locally and
+ * pushes it back via /api/blackbox/rotate. The old key keeps working until the
+ * plugin confirms the rotation, so the site is never silently broken.
  */
 export async function POST(_req, { params }) {
   const { id } = await params;
@@ -20,19 +19,12 @@ export async function POST(_req, { params }) {
   const site = await getSiteById(id);
   if (!site) return fail(404, "Website not found");
 
-  const result = await rotateCollectorKey(id);
+  const result = await requestKeyRotation(id);
   if (!result.ok) return fail(result.status, result.error);
 
   return json({
     siteId: id,
-    collectorKey: result.collectorKey,
-    rotatedAt: result.rotatedAt,
-    warning:
-      "The previous collector key no longer works. Reconnect the WordPress plugin with a new connection code, or update its stored key.",
-    nextSteps: [
-      "Open WordPress → ScanSite Black Box",
-      "Choose Reconnect and enter the new connection code",
-      "Save the new collector key when it is shown once",
-    ],
+    requested: true,
+    info: "Rotation requested. The WordPress plugin will generate a new key on its next heartbeat and apply it automatically. The current key keeps working until then.",
   });
 }

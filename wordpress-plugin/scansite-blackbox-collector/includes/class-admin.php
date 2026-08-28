@@ -33,6 +33,7 @@ class ScanSite_BB_Admin {
 		add_action( 'admin_post_scansite_blackbox_test', array( $this, 'handle_test' ) );
 		add_action( 'admin_post_scansite_blackbox_diagnostics', array( $this, 'handle_diagnostics' ) );
 		add_action( 'admin_post_scansite_blackbox_retry', array( $this, 'handle_retry' ) );
+		add_action( 'admin_post_scansite_blackbox_rotate', array( $this, 'handle_rotate' ) );
 	}
 
 	public function register_menu() {
@@ -119,6 +120,19 @@ class ScanSite_BB_Admin {
 				? sprintf( /* translators: %d: number of events */ __( '%d event(s) are still queued and will be retried.', 'scansite-blackbox' ), $remaining )
 				: ''
 		);
+	}
+
+	/** Rotate the collector key now (a new key is generated in WordPress). */
+	public function handle_rotate() {
+		$this->verify();
+
+		$result = ScanSite_BB_Connection::rotate_key();
+
+		if ( is_wp_error( $result ) ) {
+			$this->redirect( 'error', $result->get_error_message() );
+		}
+
+		$this->redirect( 'rotated', __( 'Collector key rotated. ScanSite now accepts only the new key.', 'scansite-blackbox' ) );
 	}
 
 	private function verify() {

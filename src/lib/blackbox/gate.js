@@ -1,21 +1,34 @@
 /**
- * Optional shared-password gate for the whole dashboard.
+ * Mandatory local-admin authentication for the whole dashboard.
  *
- * The MVP ships with no accounts (by design). For real deployments we still
- * need *some* wall in front of client data, so this provides a single shared
- * password via `SCANSITE_GATE_PASSWORD`. When unset, the gate is fully
- * disabled and behaviour is unchanged.
+ * There are no accounts and no external provider (no Clerk / Auth0 / NextAuth /
+ * Supabase / Firebase). A single local administrator is configured through the
+ * environment and every page + management API requires a valid session cookie.
  *
- * Sessions are stateless HMAC cookies keyed by the gate password, so no store
- * or Redis is required. Uses Web Crypto so the same code runs in the Edge
+ *   SCANSITE_ADMIN_USER      username (default "admin")
+ *   SCANSITE_ADMIN_PASSWORD  required — when unset the dashboard is locked out
+ *                            (fail closed) and /login explains how to configure it.
+ *   SCANSITE_GATE_PASSWORD   legacy alias for the password, kept for older deploys.
+ *
+ * Sessions are stateless HMAC cookies keyed by the configured password, so no
+ * store or Redis is required. Uses Web Crypto so the same code runs in the Edge
  * middleware and in Node route handlers.
  */
 
 export const GATE_COOKIE = "scansite_session";
 export const SESSION_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
-export function gateEnabled() {
-  return Boolean(process.env.SCANSITE_GATE_PASSWORD);
+export function adminPassword() {
+  return process.env.SCANSITE_ADMIN_PASSWORD || process.env.SCANSITE_GATE_PASSWORD || "";
+}
+
+export function adminUsername() {
+  return process.env.SCANSITE_ADMIN_USER || "admin";
+}
+
+/** Authentication is mandatory: configured = a password exists to check against. */
+export function adminConfigured() {
+  return Boolean(adminPassword());
 }
 
 async function hmacHex(key, data) {
@@ -38,28 +51,36 @@ function safeEqual(a, b) {
   return diff === 0;
 }
 
+/** Constant-time check of submitted credentials against the configured admin. */
+export async function verifyLogin(username, password) {
+  const configuredPass = adminPassword();
+  if (!configuredPass) return false;
+
+  const okUser = safeEqual(
+    await hmacHex("scansite-admin", String(username ?? "")),
+    await hmacHex("scansite-admin", adminUsername()),
+  );
+  const okPass = safeEqual(
+    await hmacHex("scansite-admin", String(password ?? "")),
+    await hmacHex("scansite-admin", configuredPass),
+  );
+  return okUser && okPass;
+}
+
 /** Value for the session cookie. */
 export async function createSession() {
   const exp = Date.now() + SESSION_MS;
-  const sig = await hmacHex(process.env.SCANSITE_GATE_PASSWORD, String(exp));
+  const sig = await hmacHex(adminPassword(), String(exp));
   return `${exp}.${sig}`;
 }
 
 /** True when the cookie is present, unexpired, and correctly signed. */
 export async function verifySession(value) {
-  if (!value) return false;
-  const [expStr, sig] = value.split(".");
+  const key = adminPassword();
+  if (!key || !value) return false;
+  const [expStr, sig] = String(value).split(".");
   const exp = Number(expStr);
   if (!Number.isFinite(exp) || exp < Date.now()) return false;
-  const expected = await hmacHex(process.env.SCANSITE_GATE_PASSWORD, expStr);
+  const expected = await hmacHex(key, expStr);
   return safeEqual(expected, sig ?? "");
-}
-
-/** Constant-time compare of a submitted password against the configured one. */
-export async function checkPassword(candidate) {
-  const configured = process.env.SCANSITE_GATE_PASSWORD;
-  if (!configured) return false;
-  const a = await hmacHex("scansite-gate", String(candidate ?? ""));
-  const b = await hmacHex("scansite-gate", configured);
-  return safeEqual(a, b);
 }

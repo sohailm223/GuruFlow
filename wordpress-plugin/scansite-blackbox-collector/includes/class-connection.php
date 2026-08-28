@@ -136,6 +136,42 @@ class ScanSite_BB_Connection {
 	}
 
 	/**
+	 * Rotate the collector key.
+	 *
+	 * The replacement key is generated HERE, in WordPress, and the raw secret is
+	 * stored only in wp_options. It is transmitted exactly once (over HTTPS,
+	 * HMAC-signed with the current key) so ScanSite can store its hash; the
+	 * dashboard never sees or stores the raw value.
+	 *
+	 * @return true|WP_Error
+	 */
+	public static function rotate_key() {
+		if ( ! self::has_credentials() ) {
+			return new WP_Error( 'scansite_not_connected', 'This website is not connected yet.' );
+		}
+
+		$new_key = 'sk_bb_' . bin2hex( random_bytes( 32 ) );
+
+		$payload = wp_json_encode( array( 'newCollectorKey' => $new_key ) );
+
+		// Signed with the CURRENT key; the server accepts the rotation while the
+		// old key is still valid, then only the new hash is kept.
+		$response = self::request( self::endpoint() . '/api/blackbox/rotate', $payload, array(), 15 );
+
+		if ( is_wp_error( $response ) ) {
+			return new WP_Error( 'scansite_rotate_failed', self::friendly_error( $response ) );
+		}
+
+		$status = (int) wp_remote_retrieve_response_code( $response );
+		if ( 200 !== $status ) {
+			return new WP_Error( 'scansite_rotate_failed', 'ScanSite rejected the key rotation.' );
+		}
+
+		update_option( self::OPT_KEY, $new_key );
+		return true;
+	}
+
+	/**
 	 * Environment facts only — never configuration values or secrets.
 	 *
 	 * @return array

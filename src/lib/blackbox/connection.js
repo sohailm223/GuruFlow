@@ -128,28 +128,40 @@ export async function redeemConnectionCode({ code, siteUrl, wordpress }) {
 }
 
 /**
- * Rotate the permanent secret. Returns the new key exactly once.
+ * Ask the WordPress side to rotate its collector key.
  *
- * The old key stops working immediately, so the WordPress side must be
- * re-paired (or updated) — callers must surface that instruction.
+ * ScanSite never generates or stores the raw secret. Instead this flags the
+ * connection; the next heartbeat returns `command.rotateKey`, the plugin
+ * generates a fresh key locally, and pushes only its hash target back via
+ * /api/blackbox/rotate (authenticated with the current key). The raw key is
+ * therefore created and stored only in WordPress and never displayed.
  */
-export async function rotateCollectorKey(siteId) {
+export async function requestKeyRotation(siteId) {
+  const conn = await getConnection(siteId);
+  if (!conn) return { ok: false, status: 404, error: "Website not found" };
+  await saveConnection(siteId, { pendingRotate: true, rotationRequestedAt: Date.now() });
+  return { ok: true, siteId };
+}
+
+/** Validate and accept a WordPress-generated replacement key (hash-only). */
+export async function acceptKeyRotation(siteId, newKey) {
+  if (typeof newKey !== "string" || !/^sk_bb_[0-9a-f]{64}$/.test(newKey)) {
+    return { ok: false, status: 400, error: "Invalid collector key format" };
+  }
   const conn = await getConnection(siteId);
   if (!conn) return { ok: false, status: 404, error: "Website not found" };
 
-  const collectorKey = generateCollectorKey();
   const now = Date.now();
-
   await saveConnection(siteId, {
-    keyHash: hashSecret(collectorKey),
+    keyHash: hashSecret(newKey),
     keyDisplay: displayKey(),
-    keyFingerprint: keyFingerprint(collectorKey),
+    keyFingerprint: keyFingerprint(newKey),
     keyCreatedAt: now,
     keyRotatedAt: now,
     rotatedCount: (conn.rotatedCount ?? 0) + 1,
+    pendingRotate: false,
   });
-
-  return { ok: true, siteId, collectorKey, rotatedAt: now };
+  return { ok: true, siteId, rotatedAt: now };
 }
 
 /**
@@ -183,6 +195,7 @@ export function publicConnection(conn) {
     connectedAt: conn.connectedAt ?? null,
     keyRotatedAt: conn.keyRotatedAt ?? null,
     rotatedCount: conn.rotatedCount ?? 0,
+    rotationPending: Boolean(conn.pendingRotate),
     pendingCode:
       conn.code && !conn.codeUsed && conn.codeExpiresAt > Date.now()
         ? { code: conn.code, expiresAt: conn.codeExpiresAt }

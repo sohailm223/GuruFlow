@@ -12,8 +12,40 @@
  * the earlier version.
  */
 
+import crypto from 'crypto';
+
 const BASE = process.env.SCANSITE_URL || 'http://127.0.0.1:3000';
 const MINUTE = 60_000;
+
+/* Mandatory dashboard auth + required HMAC signing (mirror of the server). */
+const ADMIN_USER = process.env.SCANSITE_ADMIN_USER || 'admin';
+const ADMIN_PASS = process.env.SCANSITE_ADMIN_PASSWORD || 'scansite-test-pass';
+let ADMIN_COOKIE = '';
+
+function signed(site, key, body) {
+  const raw = JSON.stringify(body ?? {});
+  const ts = String(Math.floor(Date.now() / 1000));
+  const nonce = crypto.randomBytes(16).toString('hex');
+  const sig = crypto.createHmac('sha256', key).update(`${ts}.${nonce}.${raw}`).digest('hex');
+  return {
+    'X-ScanSite-Site': site,
+    'X-ScanSite-Key': key,
+    'X-ScanSite-Timestamp': ts,
+    'X-ScanSite-Nonce': nonce,
+    'X-ScanSite-Signature': `sha256=${sig}`,
+  };
+}
+
+{
+  const r = await fetch(BASE + '/api/blackbox/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: ADMIN_USER, password: ADMIN_PASS }),
+  });
+  const setc = r.headers.getSetCookie?.() ?? [];
+  const c = setc.find((s) => s.startsWith('scansite_session='));
+  if (c) ADMIN_COOKIE = c.split(';')[0];
+}
 
 let pass = 0;
 let fail = 0;
@@ -31,9 +63,14 @@ function check(name, condition, detail = '') {
 }
 
 async function call(method, path, body, headers = {}) {
+  if (typeof headers === 'function') headers = headers(body);
   const res = await fetch(BASE + path, {
     method,
-    headers: { 'Content-Type': 'application/json', ...headers },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(ADMIN_COOKIE ? { Cookie: ADMIN_COOKIE } : {}),
+      ...headers,
+    },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const text = await res.text();
@@ -84,7 +121,7 @@ check('GET masks the key', /•/.test(JSON.stringify(afterConnect.body)), afterC
 /* ------------------------------------------------------- ingest auth */
 console.log('\nIngest authentication (messages the collector depends on verbatim)');
 
-const H = { 'X-ScanSite-Site': siteId, 'X-ScanSite-Key': key };
+const H = (body) => signed(siteId, key, body);
 const event = { eventId: `evt_${unique()}`, type: 'plugin_activated', category: 'plugin', timestamp: new Date().toISOString() };
 
 const okIngest = await call('POST', '/api/blackbox/ingest', { site: siteId, events: [event] }, H);
@@ -140,7 +177,7 @@ check('Rotated key invalidates the old one', oldKeyRejected.status === 401, `got
 /* ------------------------------------------------------- heartbeat */
 console.log('\nHeartbeat and verification');
 
-const H2 = { 'X-ScanSite-Site': siteId, 'X-ScanSite-Key': key2 };
+const H2 = (body) => signed(siteId, key2, body);
 const hb = await call('POST', '/api/blackbox/heartbeat', { siteId, pluginVersion: '0.2.0', wordpressVersion: '6.8.3', phpVersion: '8.3.32' }, H2);
 check('Heartbeat accepted', hb.status === 200 && hb.body?.success === true, `got ${hb.status}`);
 check('Heartbeat reports health', typeof hb.body?.health?.label === 'string', JSON.stringify(hb.body?.health));

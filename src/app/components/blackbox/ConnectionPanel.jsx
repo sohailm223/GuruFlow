@@ -48,7 +48,7 @@ export default function ConnectionPanel({ site, health }) {
   const rotate = () =>
     act("rotate", async () => {
       const data = await post(`/api/blackbox/sites/${site.id}/rotate-key`);
-      setNewKey({ kind: "rotate", key: data.collectorKey, warning: data.warning });
+      setNewKey({ kind: "rotate", info: data.info });
     });
 
   const reconnect = () =>
@@ -116,17 +116,17 @@ export default function ConnectionPanel({ site, health }) {
 
       {newKey?.kind === "rotate" && (
         <div className="mt-5 rounded-lg border border-amber-200 bg-amber-50 p-4">
-          <p className="text-sm font-medium text-amber-900">New collector key</p>
-          <p className="mt-1 break-all font-mono text-xs text-amber-900">{newKey.key}</p>
-          <p className="mt-2 text-xs text-amber-800">{newKey.warning}</p>
+          <p className="text-sm font-medium text-amber-900">Key rotation requested</p>
+          <p className="mt-1 text-xs text-amber-800">{newKey.info}</p>
           <p className="mt-1 text-xs text-amber-800">
-            This key is shown once. Copy it now — it will not be displayed again.
+            The new key is generated inside WordPress and never displayed here; ScanSite stores
+            only its hash.
           </p>
           <button
             onClick={() => setNewKey(null)}
             className="mt-3 text-xs font-medium text-amber-900 underline"
           >
-            I&apos;ve saved it
+            Dismiss
           </button>
         </div>
       )}

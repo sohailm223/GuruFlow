@@ -2,9 +2,11 @@
 /**
  * Request signing.
  *
- * Isolated on purpose so HMAC signing can be switched on without touching the
- * rest of the collector. The MVP authenticates with the per-site collector key
- * alone; when signing is enabled the two extra headers are simply added.
+ * Every request to ScanSite is HMAC-signed; signing is mandatory, not opt-in.
+ * The signature covers the timestamp, a single-use nonce and the raw body so a
+ * captured request cannot be replayed:
+ *
+ *   X-ScanSite-Signature = sha256=HMAC( key, timestamp . '.' . nonce . '.' . body )
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -16,6 +18,7 @@ class ScanSite_BB_Signing {
 	const HEADER_SITE      = 'X-ScanSite-Site';
 	const HEADER_KEY       = 'X-ScanSite-Key';
 	const HEADER_TIMESTAMP = 'X-ScanSite-Timestamp';
+	const HEADER_NONCE     = 'X-ScanSite-Nonce';
 	const HEADER_SIGNATURE = 'X-ScanSite-Signature';
 
 	/**
@@ -27,31 +30,32 @@ class ScanSite_BB_Signing {
 	 * @return array
 	 */
 	public static function headers( $site_id, $collector_key, $body ) {
-		$headers = array(
+		$timestamp = (string) time();
+		$nonce     = self::nonce();
+
+		return array(
 			'Content-Type'          => 'application/json',
 			self::HEADER_SITE       => $site_id,
 			self::HEADER_KEY        => $collector_key,
-		);
-
-		if ( self::signing_enabled() ) {
-			$timestamp                        = (string) time();
-			$headers[ self::HEADER_TIMESTAMP ] = $timestamp;
-			$headers[ self::HEADER_SIGNATURE ] = 'sha256=' . hash_hmac(
+			self::HEADER_TIMESTAMP  => $timestamp,
+			self::HEADER_NONCE      => $nonce,
+			self::HEADER_SIGNATURE  => 'sha256=' . hash_hmac(
 				'sha256',
-				$timestamp . '.' . $body,
+				$timestamp . '.' . $nonce . '.' . $body,
 				$collector_key
-			);
-		}
-
-		return $headers;
+			),
+		);
 	}
 
 	/**
-	 * Signing is opt-in until the ScanSite side requires it.
+	 * A single-use, high-entropy nonce so ScanSite can reject replays.
 	 *
-	 * @return bool
+	 * @return string 32 hex chars
 	 */
-	public static function signing_enabled() {
-		return (bool) get_option( 'scansite_blackbox_signing', false );
+	private static function nonce() {
+		if ( function_exists( 'wp_generate_password' ) ) {
+			return strtolower( wp_generate_password( 32, false, false ) );
+		}
+		return bin2hex( random_bytes( 16 ) );
 	}
 }

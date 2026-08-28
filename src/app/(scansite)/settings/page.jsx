@@ -1,9 +1,11 @@
 import { ShieldCheck, ShieldOff } from "lucide-react";
+import { adminConfigured, adminUsername } from "@/lib/blackbox/gate";
 
 export const dynamic = "force-dynamic";
 
 export default function SettingsPage() {
-  const gateOn = Boolean(process.env.SCANSITE_GATE_PASSWORD);
+  const gateOn = adminConfigured();
+  const username = adminUsername();
 
   return (
     <div className="space-y-6">
@@ -16,11 +18,11 @@ export default function SettingsPage() {
         <div className="flex items-center gap-3">
           {gateOn ? <ShieldCheck size={20} className="text-emerald-400" /> : <ShieldOff size={20} className="text-amber-400" />}
           <div>
-            <p className="text-sm font-medium text-slate-200">Management access gate</p>
+            <p className="text-sm font-medium text-slate-200">Local admin login (mandatory)</p>
             <p className="text-xs text-slate-500">
               {gateOn
-                ? "Enabled — a shared password is required to open management pages and gated APIs."
-                : "Disabled — set SCANSITE_GATE_PASSWORD to require a password before exposing this instance."}
+                ? `Enabled — sign in as “${username}”. Every page and management API requires a session.`
+                : "Not configured — the dashboard is locked until SCANSITE_ADMIN_PASSWORD is set on the server."}
             </p>
           </div>
         </div>

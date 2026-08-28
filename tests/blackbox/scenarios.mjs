@@ -11,13 +11,49 @@
  * the repository so it cannot be lost again.
  */
 
+import crypto from 'crypto';
+
 const BASE = process.env.SCANSITE_URL || 'http://127.0.0.1:3000';
 const MINUTE = 60_000;
 
+const ADMIN_USER = process.env.SCANSITE_ADMIN_USER || 'admin';
+const ADMIN_PASS = process.env.SCANSITE_ADMIN_PASSWORD || 'scansite-test-pass';
+let ADMIN_COOKIE = '';
+
+function signed(site, key, body) {
+  const raw = JSON.stringify(body ?? {});
+  const ts = String(Math.floor(Date.now() / 1000));
+  const nonce = crypto.randomBytes(16).toString('hex');
+  const sig = crypto.createHmac('sha256', key).update(`${ts}.${nonce}.${raw}`).digest('hex');
+  return {
+    'X-ScanSite-Site': site,
+    'X-ScanSite-Key': key,
+    'X-ScanSite-Timestamp': ts,
+    'X-ScanSite-Nonce': nonce,
+    'X-ScanSite-Signature': `sha256=${sig}`,
+  };
+}
+
+{
+  const r = await fetch(BASE + '/api/blackbox/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: ADMIN_USER, password: ADMIN_PASS }),
+  });
+  const setc = r.headers.getSetCookie?.() ?? [];
+  const c = setc.find((s) => s.startsWith('scansite_session='));
+  if (c) ADMIN_COOKIE = c.split(';')[0];
+}
+
 async function call(method, path, body, headers = {}) {
+  if (typeof headers === 'function') headers = headers(body);
   const res = await fetch(BASE + path, {
     method,
-    headers: { 'Content-Type': 'application/json', ...headers },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(ADMIN_COOKIE ? { Cookie: ADMIN_COOKIE } : {}),
+      ...headers,
+    },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   return { status: res.status, body: await res.json().catch(() => null) };
@@ -47,10 +83,7 @@ async function cleanup() {
 }
 
 async function ingest(siteId, key, events) {
-  return call('POST', '/api/blackbox/ingest', { site: siteId, events }, {
-    'X-ScanSite-Site': siteId,
-    'X-ScanSite-Key': key,
-  });
+  return call('POST', '/api/blackbox/ingest', { site: siteId, events }, (body) => signed(siteId, key, body));
 }
 
 async function incidentsFor(siteId) {
