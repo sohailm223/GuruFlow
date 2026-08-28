@@ -24,12 +24,26 @@ async function call(method, path, body, headers = {}) {
 }
 
 /** Create a site, pair a collector, return working credentials. */
+/** Sites created by this run, deleted again on the way out. */
+const createdSites = [];
+
 async function provision(name) {
   const created = await call('POST', '/api/blackbox/sites', { name, url: `http://scenario-${Date.now()}-${Math.random().toString(36).slice(2, 7)}.test`, environment: 'development' });
   const siteId = created.body.site.id;
+  createdSites.push(siteId);
   const code = created.body.connection.code;
   const connected = await call('POST', '/api/blackbox/connect', { code, siteUrl: created.body.site.url });
   return { siteId, key: connected.body.collectorKey };
+}
+
+/**
+ * Remove the throwaway sites. Without this the dashboard fills up with
+ * duplicate "Scenario: ..." entries on every run.
+ */
+async function cleanup() {
+  for (const id of createdSites) {
+    await call('DELETE', `/api/blackbox/sites/${id}?purge=true`);
+  }
 }
 
 async function ingest(siteId, key, events) {
@@ -126,6 +140,7 @@ for (const s of scenarios) {
   detail.push({ scenario: s.name, expected: `${s.expectBand} ${s.expectTitle}`, actual: top ? `${top.severity} ${top.title}` : null, ok });
 }
 
-console.log(`\n${pass}/${scenarios.length} scenarios correct`);
+await cleanup();
+console.log(`\n${pass}/${scenarios.length} scenarios correct (${createdSites.length} test sites removed)`);
 if (fail) process.exit(1);
 process.exit(0);

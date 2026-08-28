@@ -185,8 +185,13 @@ for (const [c, re] of confidences) {
   check(`confidence ${c}% -> ${re.source}`, re.test(confidenceLabel(c)), `got ${confidenceLabel(c)}`);
 }
 
+/* ------------------------------------------------------- cleanup */
+// Remove the throwaway site, otherwise every run leaves another
+// "API Suite" entry cluttering the dashboard.
+await call('DELETE', `/api/blackbox/sites/${siteId}?purge=true`);
+
 /* ------------------------------------------------------- summary */
-console.log(`\n${pass}/${pass + fail} assertions passed`);
+console.log(`\n${pass}/${pass + fail} assertions passed (test site removed)`);
 if (fail) {
   console.log(`Failures: ${failures.join('; ')}`);
   process.exit(1);
