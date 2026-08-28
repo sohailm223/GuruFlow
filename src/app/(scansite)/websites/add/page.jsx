@@ -6,9 +6,14 @@ export const dynamic = "force-dynamic";
 
 export default async function AddWebsitePage() {
   const store = await headers();
-  const host = store.get("host");
-  const proto = store.get("x-forwarded-proto") ?? "http";
-  const derived = host ? `${proto}://${host}` : "";
+
+  // Prefer the public address reported by a proxy/tunnel so the wizard shows
+  // an endpoint the WordPress site can actually reach.
+  const endpoint = scansiteBaseUrl({
+    host: store.get("host"),
+    fwdHost: store.get("x-forwarded-host"),
+    proto: store.get("x-forwarded-proto"),
+  });
 
   return (
     <div className="space-y-6">
@@ -19,7 +24,7 @@ export default async function AddWebsitePage() {
         </p>
       </header>
 
-      <AddWebsiteWizard defaultEndpoint={scansiteBaseUrl({ url: derived })} />
+      <AddWebsiteWizard defaultEndpoint={endpoint} />
     </div>
   );
 }

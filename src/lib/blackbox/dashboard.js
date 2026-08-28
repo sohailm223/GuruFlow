@@ -211,22 +211,40 @@ function getSiteStatsFromOpen(open, all) {
 /**
  * ScanSite base URL for the connection instructions.
  *
- * Never hardcoded to a production domain — an explicit env var wins, otherwise
- * it is derived from the request the user actually made, so a LAN address or a
- * development tunnel works without code changes.
+ * Never hardcoded to a production domain — an explicit env var wins. Otherwise
+ * we prefer the public address reported by a reverse proxy or tunnel
+ * (X-Forwarded-Host / X-Forwarded-Proto), falling back to the Host the request
+ * arrived on, so a LAN address, a cloudflared tunnel, or the hosted preview all
+ * work without code changes. Only used to *display* a suggested endpoint; it is
+ * never part of authentication.
  */
 export function scansiteBaseUrl(req) {
   const configured = process.env.NEXT_PUBLIC_SCANSITE_BASE_URL;
   if (configured) return configured.replace(/\/$/, "");
 
+  const fwdHost = firstValue(req?.fwdHost);
+  const host = fwdHost ?? req?.host;
+  if (host) {
+    // Behind a proxy the public scheme is what the proxy saw; a forwarded
+    // host without a proto implies TLS termination at the proxy.
+    const proto = firstValue(req?.proto) ?? (fwdHost ? "https" : "http");
+    return `${proto}://${host}`;
+  }
+
   if (req?.url) {
     try {
-      const url = new URL(req.url);
-      return url.origin;
+      return new URL(req.url).origin;
     } catch {
       // fall through
     }
   }
 
   return "";
+}
+
+/** First entry of a possibly comma-separated forwarded header value. */
+function firstValue(value) {
+  if (!value) return null;
+  const first = value.split(",")[0].trim();
+  return first || null;
 }
