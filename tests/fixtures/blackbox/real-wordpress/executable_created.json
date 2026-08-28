@@ -1,9 +1,9 @@
 {
-  "eventId": "evt_8298d350fbe4ff8b",
+  "eventId": "evt_018c276112669cc3",
   "siteId": "site_example000000",
   "category": "file",
   "type": "executable_created",
-  "timestamp": 1787914678000,
+  "timestamp": 1787915233000,
   "severityHint": null,
   "actor": {
     "userId": 1,
@@ -23,9 +23,9 @@
     "bytes": 68,
     "permissions": "0666"
   },
-  "receivedAt": 1787914678230,
+  "receivedAt": 1787915233050,
   "incident": {
-    "id": "inc_31079e20b7a3",
+    "id": "inc_5ec5162ce35c",
     "title": "Backdoor planted after privilege escalation",
     "severity": "critical",
     "riskScore": 100,

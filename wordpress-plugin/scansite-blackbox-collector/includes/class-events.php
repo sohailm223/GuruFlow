@@ -48,6 +48,17 @@ class ScanSite_BB_Events {
 	 */
 	const UPLOAD_SCAN_BUDGET = 3000;
 
+	/**
+	 * Key fragments that must never leave the site, even nested inside metadata.
+	 *
+	 * @var string[]
+	 */
+	const FORBIDDEN_KEY_FRAGMENTS = array(
+		'password', 'pass', 'secret', 'token', 'cookie', 'salt', 'auth_key',
+		'private_key', 'api_key', 'apikey', 'authorization', 'session',
+		'card', 'cvv', 'stripe',
+	);
+
 	/** @var int[] failed login counters, keyed by user login */
 	private $login_counts = array();
 
@@ -873,35 +884,44 @@ class ScanSite_BB_Events {
 	 * @return array
 	 */
 	private function sanitize( $event ) {
-		$forbidden = array(
-			'password', 'pass', 'secret', 'token', 'cookie', 'salt', 'auth_key',
-			'private_key', 'api_key', 'apikey', 'authorization', 'session',
-			'card', 'cvv', 'stripe',
-		);
+		return $this->sanitize_walk( $event );
+	}
 
-		$walk = function ( $value ) use ( &$walk, $forbidden ) {
-			if ( is_array( $value ) ) {
-				$out = array();
-				foreach ( $value as $key => $item ) {
-					$lower = strtolower( (string) $key );
-					foreach ( $forbidden as $bad ) {
-						if ( false !== strpos( $lower, $bad ) ) {
-							continue 2;
-						}
-					}
-					$out[ $key ] = $walk( $item );
-				}
-				return $out;
-			}
-
+	/**
+	 * Recursively drop forbidden keys and any non-scalar leaf.
+	 *
+	 * Deliberately a named method rather than a recursive closure: a
+	 * `$variable( ... )` call is the only construct in this plugin that a
+	 * heuristic malware scanner could mistake for dynamic code execution.
+	 *
+	 * @param mixed $value
+	 * @return mixed
+	 */
+	private function sanitize_walk( $value ) {
+		if ( ! is_array( $value ) ) {
 			if ( is_scalar( $value ) || null === $value ) {
 				return $value;
 			}
 
 			return null;
-		};
+		}
 
-		return $walk( $event );
+		$out = array();
+
+		foreach ( $value as $key => $item ) {
+			$lower = strtolower( (string) $key );
+
+			foreach ( self::FORBIDDEN_KEY_FRAGMENTS as $bad ) {
+				if ( false !== strpos( $lower, $bad ) ) {
+					// Skip this key entirely, whatever its depth.
+					continue 2;
+				}
+			}
+
+			$out[ $key ] = $this->sanitize_walk( $item );
+		}
+
+		return $out;
 	}
 
 	/**

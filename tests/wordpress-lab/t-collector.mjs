@@ -243,6 +243,37 @@ lab_dump('raw', wp_json_encode( $q ) );`);
   note('queue', 'Cron args are not transmitted (count + hash only)',
     cronEv && cronEv.metadata?.argCount === 2 && !!cronEv.metadata?.argsHash && !JSON.stringify(cronEv).includes('abc123'),
     `argCount=${cronEv?.metadata?.argCount} argsHash=${cronEv?.metadata?.argsHash} rawArgsSent=${JSON.stringify(cronEv).includes('abc123')}`);
+  /* The privacy filter itself. The audit above scans whatever real events
+   * happened to be captured; if none carried a secret-shaped key it would not
+   * notice the sanitizer breaking. This exercises it directly, at depth. */
+  const san = await phpRun(php, `
+lab_clear_queue();
+$e = new ScanSite_BB_Events();
+$e->enqueue( 'collector_test', 'core', array(
+	'metadata' => array(
+		'password'   => 'hunter2',
+		'api_key'    => 'sk_live_abc',
+		'safe'       => 'keep-me',
+		'nested'     => array(
+			'user_secret' => 'deep-value',
+			'cookie'      => 'auth=1',
+			'ok'          => 42,
+		),
+		'objectlike' => new stdClass(),
+	),
+) );
+$q = lab_queue();
+lab_dump('san', array(
+	'json'     => wp_json_encode( isset( $q[0] ) ? $q[0] : null ),
+	'keptSafe' => isset( $q[0]['metadata']['safe'] ) ? $q[0]['metadata']['safe'] : null,
+	'keptOk'   => isset( $q[0]['metadata']['nested']['ok'] ) ? $q[0]['metadata']['nested']['ok'] : null,
+) );`);
+  const sanJson = san.markers.san?.json || '';
+  const leaked = ['hunter2', 'sk_live_abc', 'deep-value', 'auth=1'].filter((v) => sanJson.includes(v));
+  note('queue', 'Sanitizer strips secret-shaped keys at any depth',
+    leaked.length === 0 && san.markers.san?.keptSafe === 'keep-me' && Number(san.markers.san?.keptOk) === 42,
+    `leaked=${leaked.length ? leaked.join(',') : 'none'} keptSafe=${san.markers.san?.keptSafe} keptNestedOk=${san.markers.san?.keptOk}`);
+
   await phpRun(php, `
 require_once ABSPATH . 'wp-admin/includes/user.php';
 $u = get_user_by( 'login', 'privacy_probe' ); if ( $u ) { wp_delete_user( $u->ID ); }
