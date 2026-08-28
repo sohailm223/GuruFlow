@@ -283,7 +283,7 @@ class ScanSite_BB_Admin {
 								<input type="url" id="scansite_endpoint" name="scansite_endpoint" class="regular-text code"
 									value="<?php echo esc_attr( $endpoint ? $endpoint : 'http://localhost:3000' ); ?>" required />
 								<p class="description">
-									<?php esc_html_e( 'For local development use http://localhost:3000. This website must be able to reach that address.', 'scansite-blackbox' ); ?>
+									<?php esc_html_e( 'An address this WordPress site can actually reach. http://localhost:3000 only works when the dashboard runs on this same server; for a dashboard on another machine or the internet, use its public or tunnel URL.', 'scansite-blackbox' ); ?>
 								</p>
 							</td>
 						</tr>

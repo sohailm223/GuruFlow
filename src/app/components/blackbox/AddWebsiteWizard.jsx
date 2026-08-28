@@ -291,6 +291,17 @@ function Step3({ site, pairing, endpoint }) {
   const [copied, setCopied] = useState(false);
   const [minutesLeft, setMinutesLeft] = useState(null);
 
+  // A localhost endpoint is only reachable from this machine — a remote
+  // WordPress site can never connect to it. Surface that before the user
+  // pastes an unreachable address into the plugin.
+  let endpointHost = "";
+  try {
+    endpointHost = new URL(endpoint).hostname;
+  } catch {
+    endpointHost = "";
+  }
+  const isLocal = ["localhost", "127.0.0.1", "0.0.0.0", "::1"].includes(endpointHost);
+
   // Read the clock in an effect, never during render.
   useEffect(() => {
     const tick = () =>
@@ -349,6 +360,22 @@ function Step3({ site, pairing, endpoint }) {
         </p>
         <p className="mt-1 break-all font-mono text-sm text-slate-700">{endpoint}</p>
       </div>
+
+      {isLocal && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          <p className="font-semibold">
+            This endpoint is only reachable from this machine.
+          </p>
+          <p className="mt-1 leading-relaxed">
+            A WordPress site on another machine or on the internet cannot reach{" "}
+            <span className="font-mono">localhost</span>. Expose the dashboard with a
+            tunnel (e.g.{" "}
+            <span className="font-mono">cloudflared tunnel --url {endpoint}</span>), set{" "}
+            <span className="font-mono">NEXT_PUBLIC_SCANSITE_BASE_URL</span> to the public
+            URL and restart, then use that address in the plugin.
+          </p>
+        </div>
+      )}
 
       <div className="flex items-center gap-3 rounded-lg bg-teal-50 p-4">
         <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-teal-600" />
