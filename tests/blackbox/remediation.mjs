@@ -296,6 +296,29 @@ check('Generic advice that no event caused cites nothing',
 const attributionPlan = buildRemediationPlan(attributionIncident);
 const reinstall = attributionPlan.priorities.find((p) => p.id === 'integrity')?.items.find((i) => i.id === 'reinstall-plugin');
 check('The reinstall step cites the plugin it names', reinstall?.evidence?.eventId === 'att_plugin', reinstall?.evidence?.eventId);
+// The plan and the prevention list give the same advice in two places; they
+// must not disagree about what caused it.
+const smtpIncident = { startedAt: at(0), entryPoint: null, events: [
+  { eventId: 'sm_acct', timestamp: at(0), type: 'administrator_created', category: 'user', target: { username: 'mallory' } },
+  { eventId: 'sm_apppw', timestamp: at(1), type: 'application_password_created', category: 'user', target: { name: 'CI Bot' }, actor: { username: 'editor1' } },
+  { eventId: 'sm_config', timestamp: at(2), type: 'siteurl_changed', category: 'config', changes: { to: 'https://evil.example' } },
+  { eventId: 'sm_smtp', timestamp: at(3), type: 'smtp_setting_changed', category: 'config', changes: { to: 'smtp.relay.example' } },
+] };
+const smtpPlan = buildRemediationPlan(smtpIncident);
+const planItem = (id) => smtpPlan.priorities.flatMap((p) => p.items).find((i) => i.id === id);
+
+check('Plan application-password step cites the application-password event', planItem('review-app-passwords')?.evidence?.eventId === 'sm_apppw', planItem('review-app-passwords')?.evidence?.eventId);
+check('Plan SMTP step cites the mail-settings event', planItem('check-smtp')?.evidence?.eventId === 'sm_smtp', planItem('check-smtp')?.evidence?.eventId);
+check('Plan account steps still cite the account event', planItem('reset-admin-passwords')?.evidence?.eventId === 'sm_acct', planItem('reset-admin-passwords')?.evidence?.eventId);
+check('Plan and prevention cite the same event for the same advice',
+  planItem('review-app-passwords')?.evidence?.eventId === buildPrevention(smtpIncident).find((p) => /Review application passwords/.test(p.text))?.evidence?.eventId);
+check('Advice with no specific event falls back to its priority, not to nothing',
+  (() => {
+    const bare = buildRemediationPlan({ startedAt: at(0), entryPoint: null, events: [{ eventId: 'only_acct', timestamp: at(0), type: 'administrator_created', category: 'user', target: { username: 'mallory' } }] });
+    const it = bare.priorities.flatMap((p) => p.items).find((i) => i.id === 'review-app-passwords');
+    return it?.evidence?.eventId === 'only_acct';
+  })());
+
 check('Every evidence-citing checklist line points at a real event',
   attributionPlan.priorities.flatMap((p) => p.items).filter((i) => i.evidence?.eventId)
     .every((i) => attributionEvents.some((e) => e.eventId === i.evidence.eventId)));

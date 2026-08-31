@@ -50,7 +50,7 @@ export function extractTargets(incident) {
   const themes = new Set();
   const config = [];
 
-  const evidence = { account: {}, file: {}, cron: {}, config: {}, plugin: {}, theme: {}, applicationPassword: null };
+  const evidence = { account: {}, file: {}, cron: {}, config: {}, plugin: {}, theme: {}, applicationPassword: null, smtp: null };
 
   const suspiciousExecutable = events.find(
     (e) => ["executable_created", "unexpected_executable"].includes(e.type) && /\.php$/i.test(strip(e.path ?? e.target?.path ?? ""))
@@ -129,6 +129,15 @@ export function extractTargets(incident) {
         };
       }
     }
+    if ((e.type === "smtp_setting_changed" || e.type === "mail_failure") && !evidence.smtp) {
+      evidence.smtp = {
+        eventId: e.eventId ?? null,
+        at: e.timestamp,
+        reason: e.type === "smtp_setting_changed"
+          ? `mail settings changed${e.changes?.to ? ` to ${e.changes.to}` : ""} in this incident window`
+          : "mail delivery failures recorded in this incident window",
+      };
+    }
     if ((e.type === "application_password_created" || e.type === "application_password_deleted") && !evidence.applicationPassword) {
       evidence.applicationPassword = {
         eventId: e.eventId ?? null,
@@ -203,7 +212,7 @@ export function buildRemediationPlan(incident) {
         ...accounts.map((a) => item(`disable-account-${a}`, `Disable ${a} if it was not authorised`, null, cite(t, "account", a) ?? first)),
         item("reset-admin-passwords", "Reset all administrator passwords", null, first),
         item("revoke-sessions", "Revoke active administrator sessions", null, first),
-        item("review-app-passwords", "Review application passwords", "Application passwords bypass the normal login screen", first),
+        item("review-app-passwords", "Review application passwords", "Application passwords bypass the normal login screen", t.evidence?.applicationPassword ?? first),
       ],
     });
   }
@@ -257,7 +266,7 @@ export function buildRemediationPlan(incident) {
       items: [
         ...t.config.map((c, i) => item(`config-${c}-${i}`, labels[c] ?? `Review the ${c} change`, null, cite(t, "config", c) ?? first)),
         item("check-dns", "Check DNS records at the registrar", "ScanSite does not monitor DNS", first),
-        item("check-smtp", "Review SMTP settings for an unfamiliar host", null, first),
+        item("check-smtp", "Review SMTP settings for an unfamiliar host", null, t.evidence?.smtp ?? first),
       ],
     });
   }
