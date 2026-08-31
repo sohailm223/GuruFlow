@@ -161,7 +161,8 @@ LAN address, tunnel or staging URL instead.
 ## What is monitored
 
 `core` · `plugin` · `theme` · `file` · `db` · `user` · `cron` · `config`
-(`.htaccess`, `wp-config.php`) · `redirect` · `auth` · `smtp`
+(`.htaccess`, `wp-config.php`) · `redirect` · `auth` · `smtp` · `error`
+(PHP fatals and uncaught exceptions, plus HTTP 5xx responses)
 
 `dns` and `ssl` remain in the schema but are **not monitored by the collector
 yet** — the UI labels them as such rather than showing fake results. They are
@@ -340,10 +341,11 @@ node tests/blackbox/api.mjs           # API contract, hardening, lifecycle, trus
 node tests/blackbox/scenarios.mjs     # detector + grouping/correlation calibration
 node tests/blackbox/dashboard.mjs     # overview priority, website table, event explorer filters, dev diagnostics
 node tests/blackbox/remediation.mjs   # likely entry point, guided fix plan, verification round trip
+node tests/blackbox/errors.mjs        # error grouping, component attribution, correlation, fix steps
 node tests/blackbox/production-render.mjs   # dev vs production render of the incident page (two servers)
 ```
 
-Four of the five `tests/blackbox` suites need a running server on
+Five of the six `tests/blackbox` suites need a running server on
 `127.0.0.1:3000` (`SCANSITE_URL` overrides) and the admin credentials from the
 environment. They create and then delete their own sites.
 
@@ -380,11 +382,20 @@ node run-all.mjs            # needs the ScanSite dev server on 127.0.0.1:3000
 lab always tests current source. `wp/`, `wp-sqlite/` and `node_modules/` are
 gitignored — they are large and reproducible.
 
-It covers connection and pairing, 27 real event types through a live
+It covers connection and pairing, 28 real event types through a live
 `wp_insert_user` / `wp_schedule_event` / file write, queue and retry behaviour,
-the admin screen, secret-leak scanning of real payloads, and a final benign
+the admin screen, secret-leak scanning of real payloads, a final benign
 multi-event scenario that must land as one incident with evidence pointing at
-real event IDs. Current result: 27/27 event types validated, 0 bugs.
+real event IDs, and PHP error capture. Current result: 28/28 event types
+validated, 0 bugs.
+
+`t-errors.mjs` raises genuine PHP fatals from a real plugin file and asserts on
+what the collector actually queued: the message, absolute and relative path,
+line number, request path, PHP version, the resolved plugin name, the
+fingerprint grouping, and that a crash loop is counted rather than duplicated.
+It also intercepts every outbound HTTP request in the process that dies to
+prove capture never calls the network, and confirms delivery still happens
+through the ordinary WP-Cron flush. 52 checks.
 
 It authenticates with `SCANSITE_ADMIN_USER` / `SCANSITE_ADMIN_PASSWORD` and
 removes the lab website both before and after the run — the dashboard's Recent
