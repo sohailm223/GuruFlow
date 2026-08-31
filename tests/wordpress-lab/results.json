@@ -17,7 +17,7 @@
     {
       "name": "Pairing code accepted by ScanSite",
       "pass": true,
-      "detail": "siteId=site_3bd2a5"
+      "detail": "siteId=site_aac74b"
     },
     {
       "name": "Collector key stored in WordPress",
@@ -47,12 +47,12 @@
     {
       "name": "Connection screen renders",
       "pass": true,
-      "detail": "8390 bytes of HTML"
+      "detail": "8522 bytes of HTML"
     },
     {
       "name": "Heartbeat reaches ScanSite",
       "pass": true,
-      "detail": "lastSeenAt 1788177969918 -> 1788177970726"
+      "detail": "lastSeenAt 1788183688057 -> 1788183688829"
     },
     {
       "name": "Heartbeat reports real versions",
@@ -165,7 +165,7 @@
       "detected": "Yes",
       "payloadCorrect": "Yes",
       "duplicates": "No",
-      "notes": "username=test_admin role=administrator userId=8"
+      "notes": "username=test_admin role=administrator userId=18"
     },
     {
       "event": "logout",
@@ -213,7 +213,7 @@
       "detected": "Yes",
       "payloadCorrect": "Yes",
       "duplicates": "No",
-      "notes": "hook=lab_test_hook schedule=hourly nextRun=2026-08-31T13:06:19+00:00"
+      "notes": "hook=lab_test_hook schedule=hourly nextRun=2026-08-31T14:41:38+00:00"
     },
     {
       "event": "cron_removed",
@@ -229,7 +229,7 @@
       "detected": "Yes",
       "payloadCorrect": "Yes",
       "duplicates": "No",
-      "notes": "path=/.htaccess sha256=6891c17522e2… contents sent=no"
+      "notes": "path=/.htaccess sha256=e4cd6935efd6… contents sent=no"
     },
     {
       "event": "wp_config_modified",
@@ -237,7 +237,7 @@
       "detected": "Yes",
       "payloadCorrect": "Yes",
       "duplicates": "No",
-      "notes": "sha256=94edd93194b8… secrets sent=no"
+      "notes": "sha256=944d5220f741… secrets sent=no"
     },
     {
       "event": "executable_created",
@@ -326,6 +326,13 @@
       "payloadCorrect": "Yes",
       "duplicates": "No",
       "notes": "Lab Test Plugin lab-test-plugin 1.0.0 -> 1.0.1 | all=plugin_updated,active_plugins_changed"
+    },
+    {
+      "event": "php_error",
+      "tested": "Yes",
+      "detected": "Yes",
+      "payloadCorrect": "Yes",
+      "notes": "Fatal error in wp-content/plugins/scansite-error-probe/scansite-error-probe.php:9"
     }
   ],
   "queue": [
@@ -452,12 +459,12 @@
     {
       "name": "Event capture is local and fast (no network)",
       "pass": true,
-      "detail": "2 ms to enqueue"
+      "detail": "3 ms to enqueue"
     },
     {
       "name": "admin_init file hashing stays cheap",
       "pass": true,
-      "detail": "94 ms"
+      "detail": "107 ms"
     },
     {
       "name": "No secret-like keys or values in real payloads",
@@ -482,12 +489,12 @@
     {
       "name": "Timestamps are ISO 8601 UTC",
       "pass": true,
-      "detail": "2026-08-31T12:07:41+00:00"
+      "detail": "2026-08-31T13:42:58+00:00"
     },
     {
       "name": "Server stores UTC (offset +00:00)",
       "pass": true,
-      "detail": "2026-08-31T12:07:41+00:00"
+      "detail": "2026-08-31T13:42:58+00:00"
     },
     {
       "name": "eventId is unique",
@@ -569,11 +576,11 @@
   "performance": [
     {
       "name": "wp_insert_user with collector active",
-      "ms": 137
+      "ms": 139
     },
     {
       "name": "admin_init (config + uploads hashing)",
-      "ms": 94
+      "ms": 107
     },
     {
       "name": "update_option with collector active",
@@ -581,7 +588,7 @@
     },
     {
       "name": "enqueue one event (no network)",
-      "ms": 2
+      "ms": 3
     }
   ],
   "bugs": [],
@@ -687,5 +694,267 @@
     "administrator_created.json",
     "cron_added.json",
     "executable_created.json"
+  ],
+  "errors": [
+    {
+      "name": "The error capture class loads inside WordPress",
+      "pass": true,
+      "detail": "class_exists=true"
+    },
+    {
+      "name": "Capture is gated on a connected website",
+      "pass": true,
+      "detail": "siteId=site_aac74b"
+    },
+    {
+      "name": "A real PHP error is captured",
+      "pass": true,
+      "detail": "php_error: Call to undefined method ScanSiteErrorProbe::method_that_does_not_exist()"
+    },
+    {
+      "name": "The message is recorded",
+      "pass": true,
+      "detail": "Call to undefined method ScanSiteErrorProbe::method_that_does_not_exist()"
+    },
+    {
+      "name": "The exact file path is recorded",
+      "pass": true,
+      "detail": "/home/user/GuruFlow/tests/wordpress-lab/wp/wp-content/plugins/scansite-error-probe/scansite-error-probe.php"
+    },
+    {
+      "name": "The exact line number is recorded",
+      "pass": true,
+      "detail": "line=9"
+    },
+    {
+      "name": "The relative path has no stray separators",
+      "pass": true,
+      "detail": "wp-content/plugins/scansite-error-probe/scansite-error-probe.php"
+    },
+    {
+      "name": "The severity is recorded",
+      "pass": true,
+      "detail": "severity=Fatal error"
+    },
+    {
+      "name": "The error class is recorded",
+      "pass": true,
+      "detail": "errorClass=Error"
+    },
+    {
+      "name": "The request path is recorded",
+      "pass": true,
+      "detail": "/wp-admin/"
+    },
+    {
+      "name": "The request method is recorded",
+      "pass": true,
+      "detail": "GET"
+    },
+    {
+      "name": "The PHP version is recorded",
+      "pass": true,
+      "detail": "php=8.3.32"
+    },
+    {
+      "name": "First/last seen are recorded",
+      "pass": true,
+      "detail": "first=1788183782 last=1788183782"
+    },
+    {
+      "name": "The actor is recorded when available",
+      "pass": true,
+      "detail": "actor=null"
+    },
+    {
+      "name": "The file is attributed to a plugin",
+      "pass": true,
+      "detail": "component=plugin"
+    },
+    {
+      "name": "The plugin slug is resolved",
+      "pass": true,
+      "detail": "slug=scansite-error-probe"
+    },
+    {
+      "name": "The plugin display name is resolved",
+      "pass": true,
+      "detail": "name=ScanSite Error Probe"
+    },
+    {
+      "name": "WordPress Core files are attributed to Core",
+      "pass": true,
+      "detail": "got=core"
+    },
+    {
+      "name": "Plugin files are attributed to Plugin",
+      "pass": true,
+      "detail": "got=plugin"
+    },
+    {
+      "name": "Must-use plugin files are attributed to MU Plugin",
+      "pass": true,
+      "detail": "got=mu_plugin"
+    },
+    {
+      "name": "Theme files are attributed to Theme",
+      "pass": true,
+      "detail": "got=theme name=Twenty Twenty-Five"
+    },
+    {
+      "name": "Upload files are attributed to Uploads",
+      "pass": true,
+      "detail": "got=uploads"
+    },
+    {
+      "name": "wp-config.php is attributed to Config",
+      "pass": true,
+      "detail": "got=config"
+    },
+    {
+      "name": "Files outside WordPress are attributed to External",
+      "pass": true,
+      "detail": "got=external"
+    },
+    {
+      "name": "An empty path degrades to Unknown, never a crash",
+      "pass": true,
+      "detail": "got=unknown"
+    },
+    {
+      "name": "Every attribution returns the same keys",
+      "pass": true,
+      "detail": "component/slug/name/relativePath present on all"
+    },
+    {
+      "name": "Capture makes no HTTP request",
+      "pass": true,
+      "detail": "outbound requests=0"
+    },
+    {
+      "name": "The error is queued locally instead",
+      "pass": true,
+      "detail": "queued=1"
+    },
+    {
+      "name": "The event survives the request that died",
+      "pass": true,
+      "detail": "1 error event(s) in the queue"
+    },
+    {
+      "name": "Delivery rides the existing WP-Cron flush",
+      "pass": true,
+      "detail": "flush scheduled=true"
+    },
+    {
+      "name": "A crash loop queues one event, not five",
+      "pass": true,
+      "detail": "queued=1"
+    },
+    {
+      "name": "The true total is kept in the throttle state",
+      "pass": true,
+      "detail": "count=5"
+    },
+    {
+      "name": "The queued event reports what it knew",
+      "pass": true,
+      "detail": "occurrences=1 totalSeen=1"
+    },
+    {
+      "name": "The next report carries the accumulated occurrences",
+      "pass": true,
+      "detail": "occurrences=5 (5 unseen of 6 total)"
+    },
+    {
+      "name": "First seen stays at the original occurrence",
+      "pass": true,
+      "detail": "first=1788183784 last=1788183784"
+    },
+    {
+      "name": "The total keeps climbing across reports",
+      "pass": true,
+      "detail": "totalSeen=6"
+    },
+    {
+      "name": "The same error on a different line is a separate group",
+      "pass": true,
+      "detail": "31fde450d0ff8e1cc6e9a3d8 vs be5d2f25fe0765014721fb18"
+    },
+    {
+      "name": "The same error in a different file is a separate group",
+      "pass": true,
+      "detail": "31fde450d0ff8e1cc6e9a3d8 vs a26bdefe16351df63b745a99"
+    },
+    {
+      "name": "A different severity is a separate group",
+      "pass": true,
+      "detail": "31fde450d0ff8e1cc6e9a3d8 vs dd0676e6a589e5ae888c4ecc"
+    },
+    {
+      "name": "The same error and line share one fingerprint",
+      "pass": true,
+      "detail": "len=24"
+    },
+    {
+      "name": "Volatile identifiers are normalised so repeats still group",
+      "pass": true,
+      "detail": "94dd37c9bd826fdde947b2fb === 94dd37c9bd826fdde947b2fb"
+    },
+    {
+      "name": "Memory addresses are normalised",
+      "pass": true,
+      "detail": "c10648d99afa4fd1878f256a === c10648d99afa4fd1878f256a"
+    },
+    {
+      "name": "No file contents are ever included",
+      "pass": true,
+      "detail": "metadata keys=fingerprint,kind,severity,errorClass,code,message,file,relativePath,line,component,componentSlug,componentName,occurrences,totalSeen,firstSeen,lastSeen,requestPath,requestMethod,phpVersion"
+    },
+    {
+      "name": "No credentials are included",
+      "pass": true,
+      "detail": "metadata keys=fingerprint,kind,severity,errorClass,code,message,file,relativePath,line,component,componentSlug,componentName,occurrences,totalSeen,firstSeen,lastSeen,requestPath,requestMethod,phpVersion"
+    },
+    {
+      "name": "The query string is not included in the request path",
+      "pass": true,
+      "detail": "requestPath=/wp-admin/"
+    },
+    {
+      "name": "The message is length-bounded",
+      "pass": true,
+      "detail": "len=73"
+    },
+    {
+      "name": "The flush reports its queue state",
+      "pass": true,
+      "detail": "QUEUE marker present=true"
+    },
+    {
+      "name": "The error leaves the queue on flush",
+      "pass": true,
+      "detail": "errors still queued=0"
+    },
+    {
+      "name": "ScanSite receives the error event",
+      "pass": true,
+      "detail": "received 1 error event(s)"
+    },
+    {
+      "name": "The delivered event keeps the file and line",
+      "pass": true,
+      "detail": "wp-content/plugins/scansite-error-probe/scansite-error-probe.php:9"
+    },
+    {
+      "name": "The delivered event keeps the component",
+      "pass": true,
+      "detail": "plugin/scansite-error-probe"
+    },
+    {
+      "name": "The delivered event keeps the fingerprint",
+      "pass": true,
+      "detail": "fingerprint=c67e57f13d17095fcda287e9"
+    }
   ]
 }

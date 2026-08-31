@@ -34,6 +34,7 @@ import { describeEvent } from "./schemas";
 import { groupIntoIncidents } from "./grouping";
 import { classifyEntryPoint } from "./entrypoint";
 import { buildRemediationPlan, buildPrevention } from "./remediation";
+import { buildErrorEvidence } from "./errors";
 
 export function newIncidentId() {
   return `inc_${crypto.randomBytes(6).toString("hex")}`;
@@ -92,7 +93,12 @@ export function analyzeIncident(events, opts = {}) {
   // Likely infection path + remediation plan are derived from the same stored
   // events, so the guidance can never drift from the evidence shown.
   const entryPoint = classifyEntryPoint(eventRefs, { knownIps: opts.knownIps ?? null });
-  const remediation = buildRemediationPlan({ events: eventRefs, entryPoint });
+  // Error evidence is derived from the same stored events, so the file, line
+  // and component shown can never drift from what the collector recorded.
+  // It is built BEFORE the fix plan because a recorded fatal with an exact file
+  // and line is the most concrete thing here, and the plan leads with it.
+  const errorEvidence = buildErrorEvidence(eventRefs);
+  const remediation = buildRemediationPlan({ events: eventRefs, entryPoint, errorEvidence });
   const prevention = buildPrevention({ events: eventRefs, entryPoint });
 
   const confidence = confidenceFor({
@@ -126,6 +132,7 @@ export function analyzeIncident(events, opts = {}) {
     entryPoint,
     remediation,
     prevention,
+    errorEvidence,
 
     title: top?.title ?? "Routine site activity",
     summary: top?.summary ?? "No suspicious pattern detected in this window.",

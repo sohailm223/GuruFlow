@@ -11,6 +11,7 @@ import { runHookTests } from './t-hooks.mjs';
 import { runUpgraderTests } from './t-upgrader.mjs';
 import { runCollectorTests } from './t-collector.mjs';
 import { runScenario } from './t-scenario.mjs';
+import { runErrorTests } from './t-errors.mjs';
 import { summary, saveResults, phpRun, results, pruneLabSites } from './harness.mjs';
 import { readFileSync } from 'node:fs';
 
@@ -40,6 +41,7 @@ await runHookTests(php);
 await runUpgraderTests(php);
 await runCollectorTests(php, siteId);
 await runScenario(php, siteId);
+await runErrorTests(php, siteId);
 summary();
 saveResults('results.json');
 

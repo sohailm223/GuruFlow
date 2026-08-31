@@ -21,12 +21,23 @@ define( 'SCANSITE_BB_DIR', plugin_dir_path( __FILE__ ) );
 
 require_once SCANSITE_BB_DIR . 'includes/class-signing.php';
 require_once SCANSITE_BB_DIR . 'includes/class-connection.php';
+require_once SCANSITE_BB_DIR . 'includes/class-error-capture.php';
 require_once SCANSITE_BB_DIR . 'includes/class-file-integrity.php';
 require_once SCANSITE_BB_DIR . 'includes/class-events.php';
 require_once SCANSITE_BB_DIR . 'includes/class-collector.php';
 require_once SCANSITE_BB_DIR . 'includes/class-heartbeat.php';
 require_once SCANSITE_BB_DIR . 'includes/class-diagnostics.php';
 require_once SCANSITE_BB_DIR . 'includes/class-admin.php';
+
+/**
+ * Register error capture immediately, not on plugins_loaded.
+ *
+ * A fatal raised while another plugin is still loading is exactly the case this
+ * exists to record, and a plugins_loaded hook would run too late to see it.
+ * The handler queues to wp_options only — no network request — so installing it
+ * early costs nothing on a healthy request.
+ */
+ScanSite_BB_Error_Capture::register();
 
 /**
  * Boot the collector.

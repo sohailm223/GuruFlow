@@ -16,6 +16,7 @@ import AffectedAreas from "@/app/components/blackbox/AffectedAreas";
 import HowToFix from "@/app/components/blackbox/HowToFix";
 import VerifyRepair from "@/app/components/blackbox/VerifyRepair";
 import PreventAgain from "@/app/components/blackbox/PreventAgain";
+import ErrorEvidence from "@/app/components/blackbox/ErrorEvidence";
 import { formatClock, formatDay } from "@/lib/blackbox/schemas";
 
 export const dynamic = "force-dynamic";
@@ -77,6 +78,9 @@ export default async function IncidentDetailPage({ params }) {
       {/* 1 ── WHAT HAPPENED */}
       <Section n={1} title="What Happened">
         <LikelyCause incident={incident} />
+        {/* Recorded errors are the most concrete evidence on the page: a real
+            message, file and line, rather than an inference. */}
+        <ErrorEvidence incident={incident} />
         <SuspiciousFileEvidence incident={incident} />
         <AttackChain incident={incident} />
         <IncidentTimeline incident={incident} />

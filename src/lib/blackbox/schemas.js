@@ -21,6 +21,10 @@ export const CATEGORIES = [
   "smtp",
   "redirect",
   "auth",
+  // PHP fatals and HTTP 5xx responses. Without this the collector's declared
+  // category is discarded by normalizeEvent() and every error falls back to
+  // "file", which mislabels it in the Events Explorer.
+  "error",
 ];
 
 export const CATEGORY_LABELS = {
@@ -133,6 +137,10 @@ export const EVENT_TYPES = [
   "ssl_renewed",
   "ssl_invalid",
 
+  // error evidence (collector: fatal errors, uncaught exceptions, HTTP 5xx)
+  "php_error",
+  "http_error",
+
   // collector self-test
   "collector_test",
 ];
@@ -221,6 +229,10 @@ export function categoryForType(type) {
     dns: "dns",
     ssl: "ssl",
     collector: "core",
+    // Belts and braces: an error event that arrives without a category is
+    // still filed as an error rather than silently becoming a file event.
+    php: "error",
+    http: "error",
   };
   return map[head] ?? "file";
 }
@@ -502,6 +514,21 @@ export function describeEvent(e) {
       }`;
     case "site_status_changed":
       return `Site status changed${ver}`;
+
+    case "php_error": {
+      const m = e.metadata ?? {};
+      const where = m.relativePath
+        ? `${m.relativePath}${m.line ? `:${m.line}` : ""}`
+        : "unknown location";
+      const n = m.occurrences > 1 ? ` (${m.occurrences} occurrences)` : "";
+      return `${m.severity ?? "PHP error"} in ${where}: ${m.message ?? "no message"}${n}`;
+    }
+
+    case "http_error": {
+      const m = e.metadata ?? {};
+      const n = m.occurrences > 1 ? ` (${m.occurrences} occurrences)` : "";
+      return `${m.severity ?? "HTTP 5xx"} on ${m.requestPath ?? "an unknown path"}${n}`;
+    }
 
     case "collector_test":
       return e.metadata?.message || "Collector connection test";

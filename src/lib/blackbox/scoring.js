@@ -203,6 +203,20 @@ export function scoreEvent(e) {
       add(1, "Logout");
       break;
 
+    case "php_error": {
+      // A fatal means the request did not complete. Weight repeats so a crash
+      // loop scores above a one-off, but cap it: frequency is not severity.
+      const n = Math.min(e.metadata?.occurrences ?? 1, 20);
+      add(35 + n, `PHP fatal error recorded${n > 1 ? ` (${n} occurrences)` : ""} (impact)`);
+      break;
+    }
+
+    case "http_error": {
+      const n = Math.min(e.metadata?.occurrences ?? 1, 20);
+      add(25 + n, `Server returned a 5xx response${n > 1 ? ` (${n} occurrences)` : ""} (impact)`);
+      break;
+    }
+
     case "site_error_burst":
       add(25, "Site started returning errors (impact)");
       break;

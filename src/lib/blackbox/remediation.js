@@ -171,6 +171,8 @@ export function extractTargets(incident) {
 }
 
 /** A checklist line, always carrying the evidence that produced it. */
+import { buildErrorFixSteps, correlateError } from "./errors.js";
+
 const item = (id, label, detail = null, evidence = null) => ({
   id,
   label,
@@ -179,6 +181,52 @@ const item = (id, label, detail = null, evidence = null) => ({
 });
 
 const cite = (targets, kind, key) => targets.evidence?.[kind]?.[key] ?? null;
+
+/**
+ * A "start here" priority built from recorded error evidence.
+ *
+ * Every item cites the event that produced it. When no recorded change
+ * explains the error, the steps say so rather than inventing a cause.
+ */
+function buildErrorPriority(incident) {
+  const primary = incident?.errorEvidence?.primary ?? null;
+  if (!primary) return null;
+
+  const steps = buildErrorFixSteps(primary);
+  if (!steps.length) return null;
+
+  const corr = primary.correlation ?? correlateError(primary, incident.events ?? []);
+
+  return {
+    id: "error-evidence",
+    title: "Start Here: Recorded Error",
+    blurb: corr.likelyCause
+      ? `${corr.likelyCause} (confidence ${corr.confidence}%).`
+      : "A PHP error was recorded at this location. No recorded change explains it yet, so start at the line itself.",
+    target: primary.relativePath
+      ? { kind: "file", value: primary.relativePath }
+      : { kind: "error", value: primary.fingerprint },
+    error: {
+      fingerprint: primary.fingerprint,
+      severity: primary.severity,
+      message: primary.message,
+      file: primary.relativePath,
+      line: primary.line,
+      component: primary.componentLabel,
+      componentName: primary.componentName,
+      occurrences: primary.occurrences,
+      firstSeen: primary.firstSeen,
+      lastSeen: primary.lastSeen,
+      confidence: corr.confidence,
+      confidenceLabel: corr.confidenceLabel,
+      likelyCause: corr.likelyCause,
+      evidence: corr.evidence,
+    },
+    items: steps.map((st) =>
+      item(st.id, st.title, st.why, st.evidence?.eventId ? { eventId: st.evidence.eventId, reason: st.why } : null)
+    ),
+  };
+}
 
 /* ------------------------------------------------------------------ *
  * Fix plan
@@ -286,6 +334,12 @@ export function buildRemediationPlan(incident) {
       item("rescan", "Re-run the File Integrity Scan"),
     ],
   });
+
+  // Error evidence comes first when present: a recorded fatal with a file and
+  // line is the most concrete thing ScanSite has, so it should not sit behind
+  // the security priorities that are inferred rather than observed.
+  const errorPriority = buildErrorPriority(incident);
+  if (errorPriority) priorities.unshift(errorPriority);
 
   const stepCount = priorities.reduce((n, p) => n + p.items.length, 0);
   const difficulty = stepCount <= 6 ? "Low" : stepCount <= 12 ? "Medium" : "High";
@@ -419,6 +473,24 @@ export const VERIFICATION_STATES = ["verified_resolved", "likely_resolved", "sti
 export const REMEDIATION_STATUSES = ["not_started", "in_progress", "partially_resolved", "verified"];
 
 /**
+ * Error groups recorded for this incident.
+ *
+ * Reads the analysis that is already stored on the incident rather than
+ * re-deriving it, so the checks listed here are the same errors the Error
+ * Evidence panel shows. Returns [] when no errors were recorded.
+ */
+function errorGroups(incident) {
+  return incident?.errorEvidence?.groups ?? [];
+}
+
+/** Whether any recorded error was an HTTP 5xx response. */
+function hasHttpErrors(incident) {
+  const groups = errorGroups(incident);
+  return groups.some((g) => g.type === "http_error") ||
+    (incident?.events ?? []).some((e) => e.type === "http_error");
+}
+
+/**
  * What ScanSite can actually re-check after a fix.
  */
 export function buildVerificationTargets(incident, targets = extractTargets(incident)) {
@@ -434,6 +506,30 @@ export function buildVerificationTargets(incident, targets = extractTargets(inci
   for (const h of t.hooks) {
     checks.push({ id: `cron:${h}`, kind: "cron", label: "Scheduled task", value: h, how: "A cron_removed or cron_modified event for this hook, recorded after it was registered" });
   }
+  // Error evidence: only present when the collector recorded errors for this
+  // incident. Each check says plainly what would count as resolved.
+  for (const g of errorGroups(incident)) {
+    const label = g.relativePath
+      ? `${g.severity ?? "PHP error"} in ${g.relativePath}${g.line ? `:${g.line}` : ""}`
+      : `${g.severity ?? "PHP error"} at an unknown location`;
+    checks.push({
+      id: `error:${g.fingerprint}`,
+      kind: "error",
+      label,
+      value: g.componentLabel,
+      how: "No further occurrence of this same error recorded after the fix — matched on error type, normalised message, file and line",
+    });
+  }
+  if (hasHttpErrors(incident)) {
+    checks.push({
+      id: "error:http",
+      kind: "error",
+      label: "HTTP 5xx responses",
+      value: "Server responses",
+      how: "No HTTP 5xx recorded after the fix. The website check below is a separate live probe of the registered origin",
+    });
+  }
+
   checks.push({ id: "integrity", kind: "integrity", label: "File integrity", value: "Latest scan", how: "A file integrity scan completed since the incident started, with zero critical files" });
   checks.push({ id: "availability", kind: "availability", label: "Website", value: "HTTP status", how: "ScanSite fetches the registered site origin and reports the HTTP status only" });
   if (t.config.length) {
@@ -561,6 +657,74 @@ export function evaluateVerification(incident, { events = [], files = [], siteSt
         ? { ...base, state: "verified_resolved", strength: "strong", detail: `${words(removed.type)} recorded after the hook was registered`, evidence: removed.eventId ?? null }
         : { ...base, state: "not_verified", strength: null, detail: "No cron removal recorded since it was registered — the collector does not snapshot cron, so absence proves nothing here", evidence: null }
     );
+  }
+
+  /* --- error evidence: has the error stopped being recorded? ---
+   *
+   * A recurring fatal is judged by whether the same fingerprint reappears
+   * after the fix, not by whether it happened before. Fingerprint match is on
+   * error type + normalised message + file + line, so a different error in the
+   * same file does not count as a recurrence of this one.
+   *
+   * "No further occurrence" is reported as weak, not strong: the collector only
+   * reports errors from requests that ran, so absence means "not seen again
+   * yet" rather than "proved fixed". The live website check is the strong one.
+   */
+  for (const g of errorGroups(incident)) {
+    const base = {
+      id: `error:${g.fingerprint}`,
+      kind: "error",
+      label: g.relativePath
+        ? `${g.severity ?? "PHP error"} in ${g.relativePath}${g.line ? `:${g.line}` : ""}`
+        : `${g.severity ?? "PHP error"} at an unknown location`,
+      value: g.componentLabel,
+    };
+
+    const recurrence = events.find(
+      (e) =>
+        (e.type === "php_error" || e.type === "http_error") &&
+        e.metadata?.fingerprint === g.fingerprint &&
+        e.timestamp > g.lastSeen
+    );
+
+    if (recurrence) {
+      results.push({
+        ...base,
+        state: "still_present",
+        strength: "strong",
+        detail: `Recorded again after the last occurrence (${new Date(recurrence.timestamp).toISOString()})`,
+        evidence: recurrence.eventId ?? null,
+      });
+    } else {
+      results.push({
+        ...base,
+        state: "likely_resolved",
+        strength: "weak",
+        detail: `No further occurrence recorded since ${new Date(g.lastSeen).toISOString()} — the collector only reports errors from requests that ran, so this is "not seen again", not proof`,
+        evidence: g.eventIds?.[g.eventIds.length - 1] ?? null,
+      });
+    }
+  }
+
+  /* --- HTTP 5xx: did the server stop failing? --- */
+  if (hasHttpErrors(incident)) {
+    const httpBase = { id: "error:http", kind: "error", label: "HTTP 5xx responses", value: "Server responses" };
+    const lastHttp = (incident.events ?? [])
+      .filter((e) => e.type === "http_error")
+      .sort((a, b) => b.timestamp - a.timestamp)[0];
+    const laterHttp = lastHttp
+      ? events.find((e) => e.type === "http_error" && e.timestamp > lastHttp.timestamp)
+      : null;
+
+    if (laterHttp) {
+      results.push({ ...httpBase, state: "still_present", strength: "strong", detail: `A 5xx was recorded again after ${new Date(lastHttp.timestamp).toISOString()}`, evidence: laterHttp.eventId ?? null });
+    } else if (siteStatus?.ok && siteStatus.status === 200) {
+      results.push({ ...httpBase, state: "verified_resolved", strength: "strong", detail: "No 5xx recorded since the last one, and the live origin probe returned HTTP 200", evidence: lastHttp?.eventId ?? null });
+    } else if (siteStatus?.blocked) {
+      results.push({ ...httpBase, state: "likely_resolved", strength: "weak", detail: "No 5xx recorded since the last one; the live probe was blocked by policy so this is not confirmed", evidence: lastHttp?.eventId ?? null });
+    } else {
+      results.push({ ...httpBase, state: "likely_resolved", strength: "weak", detail: "No 5xx recorded since the last one, but the live origin probe did not return 200, so this is not confirmed", evidence: lastHttp?.eventId ?? null });
+    }
   }
 
   /* --- integrity --- */
