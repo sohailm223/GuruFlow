@@ -18,6 +18,7 @@
  */
 
 import crypto from 'crypto';
+import fs from 'fs';
 import http from 'http';
 import { classifyEntryPoint, ENTRY_POINT_TYPES } from '../../src/lib/blackbox/entrypoint.js';
 import {
@@ -109,6 +110,7 @@ const adminChainEvents = [
 
 const admin = classifyEntryPoint(adminChainEvents, { knownIps: new Set(['203.0.113.7']) });
 check('Privilege escalation classifies as compromised admin account', admin.id === 'compromised_admin', admin.id);
+check('The account label claims possibility, not a proven compromise', admin.label === 'Possible account compromise', admin.label);
 check('Compromised-admin headline is hedged', /possible|likely|may be/i.test(admin.headline) && !/was infected|confirmed compromise/i.test(admin.headline), admin.headline);
 check('Confidence is between 25 and 90 — never certain', admin.confidence >= 25 && admin.confidence <= 90, String(admin.confidence));
 check('Confidence label matches the number', admin.confidenceLabel === 'Likely' && admin.confidence >= 75, `${admin.confidence} ${admin.confidenceLabel}`);
@@ -169,6 +171,9 @@ check('An install on its own is NOT called an entry point',
 
 const cfg = classifyEntryPoint([{ eventId: 'c1', timestamp: at(0), type: 'siteurl_changed', category: 'config', changes: { to: 'https://evil.example' } }]);
 check('A site URL change classifies as configuration hijack', cfg.id === 'configuration_hijack', cfg.id);
+check('The configuration label does not assert hijacking', cfg.label === 'Configuration or redirect change', cfg.label);
+check('The configuration chain step says what changed, not who did it',
+  cfg.chain[0].label === 'Configuration Changed' && !/hijack/i.test(cfg.chain[0].label), cfg.chain[0].label);
 
 const brute = classifyEntryPoint([
   { eventId: 'b1', timestamp: at(0), type: 'login_failed_burst', category: 'auth', count: 42, target: { username: 'admin' }, metadata: { windowMinutes: 5, ipCount: 3 } },
@@ -181,8 +186,19 @@ const uploadOnly = classifyEntryPoint([{ eventId: 'x1', timestamp: at(0), type: 
 check('A lone executable in uploads is an unexpected file upload', uploadOnly.id === 'unexpected_file_upload', uploadOnly.id);
 
 check('The published class list carries no overclaiming labels',
-  !ENTRY_POINT_TYPES.some((t) => /vulnerable|malicious|stolen|compromised credential|exploit/i.test(t.label)),
+  !ENTRY_POINT_TYPES.some((t) => /\b(vulnerable|malicious|stolen|exploit|hijack)\b/i.test(t.label)),
   JSON.stringify(ENTRY_POINT_TYPES.map((t) => t.label)));
+check('A label may only mention compromise when it is hedged',
+  ENTRY_POINT_TYPES.filter((t) => /compromis/i.test(t.label)).every((t) => /^possible /i.test(t.label)),
+  JSON.stringify(ENTRY_POINT_TYPES.filter((t) => /compromis/i.test(t.label)).map((t) => t.label)));
+// The module header deliberately names the old labels as contrast, so strip
+// comments before scanning: what matters is that no code path emits them.
+const entrySource = fs
+  .readFileSync(new URL('../../src/lib/blackbox/entrypoint.js', import.meta.url), 'utf8')
+  .replace(/\/\*[\s\S]*?\*\//g, '')
+  .replace(/^\s*\/\/.*$/gm, '');
+check('No code path still emits an overclaiming label',
+  !/Compromised Admin Account|Configuration Hijack|Vulnerable (Plugin|Theme)|Malicious Plugin|Stolen Application/i.test(entrySource));
 check('No classifier output claims vulnerability, malice or theft',
   ![plugin, themeEntry, appPwd, install].some((e) => /vulnerable|malicious|stolen/i.test(`${e.label} ${e.headline}`)));
 
@@ -565,7 +581,10 @@ if (!ADMIN_COOKIE) {
   check('Confidence for the entry point is shown', /Confidence\s*<span[^>]*>\d+%/.test(html));
   check('The classifiable paths are listed with the new wording',
     html.includes('Infection paths ScanSite can identify') && html.includes('Possible plugin-related entry point') && html.includes('Suspicious plugin installation') && html.includes('Possible application-password misuse'));
-  check('No overclaiming label reaches the page', !/Vulnerable Plugin|Vulnerable Theme|Malicious Plugin|Stolen Application Password/.test(html));
+  check('The renamed account and configuration labels reach the page',
+    html.includes('Possible account compromise') && html.includes('Configuration or redirect change'));
+  check('No overclaiming label reaches the page',
+    !/Vulnerable Plugin|Vulnerable Theme|Malicious Plugin|Stolen Application Password|Compromised Admin Account|Configuration Hijack/.test(html));
   check('Priority 1 is Secure Access on the page', html.includes('Priority 1 — Secure Access'));
   check('The page cites the event behind each recommendation', html.includes('Reason:') && html.includes(seeded[0].eventId));
   check('Guided fix button and estimates are present', html.includes('Start Guided Fix') && html.includes('Estimated difficulty') && html.includes('Estimated steps'));

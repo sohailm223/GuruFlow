@@ -29,13 +29,13 @@ const MINUTE = 60_000;
 
 /** The classifications ScanSite can produce. */
 export const ENTRY_POINT_TYPES = [
-  { id: "compromised_admin", label: "Compromised Admin Account" },
+  { id: "compromised_admin", label: "Possible account compromise" },
   { id: "vulnerable_plugin", label: "Possible plugin-related entry point" },
   { id: "vulnerable_theme", label: "Possible theme-related entry point" },
   { id: "stolen_application_password", label: "Possible application-password misuse" },
   { id: "malicious_plugin_install", label: "Suspicious plugin installation" },
   { id: "unexpected_file_upload", label: "Unexpected File Upload" },
-  { id: "configuration_hijack", label: "Configuration Hijack" },
+  { id: "configuration_hijack", label: "Configuration or redirect change" },
   { id: "brute_force_login", label: "Brute-force Login" },
   { id: "unknown", label: "Unknown Entry Point" },
 ];
@@ -126,7 +126,7 @@ function compromisedAdmin(events, knownIps) {
 
   return {
     id: "compromised_admin",
-    label: "Compromised Admin Account",
+    label: "Possible account compromise",
     headline: "Possible compromised administrator access",
     score,
     reasons,
@@ -328,7 +328,7 @@ function configurationHijack(events) {
 
   if (anchor.type === "siteurl_changed" || anchor.type === "home_changed") {
     reasons.push({ text: `The site URL changed to ${anchor.changes?.to ?? "an unknown value"}`, eventId: anchor.eventId });
-    chain.push({ label: "Configuration Hijack", detail: anchor.changes?.to ?? null, eventId: anchor.eventId });
+    chain.push({ label: "Configuration Changed", detail: anchor.changes?.to ?? null, eventId: anchor.eventId });
   } else if (anchor.type === "htaccess_modified" || anchor.type === "wp_config_modified") {
     reasons.push({ text: `${anchor.type === "htaccess_modified" ? ".htaccess" : "wp-config.php"} was modified`, eventId: anchor.eventId });
     chain.push({ label: "Configuration File Changed", detail: anchor.type === "htaccess_modified" ? ".htaccess" : "wp-config.php", eventId: anchor.eventId });
@@ -356,7 +356,7 @@ function configurationHijack(events) {
 
   return {
     id: "configuration_hijack",
-    label: "Configuration Hijack",
+    label: "Configuration or redirect change",
     headline: "Site configuration or redirects were changed",
     score,
     reasons,
