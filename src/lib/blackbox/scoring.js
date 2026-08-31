@@ -122,7 +122,7 @@ export function scoreEvent(e) {
 
     case "siteurl_changed":
     case "home_changed":
-      add(32, "Site or home URL changed (traffic hijacking risk)");
+      add(32, "Site or home URL changed (where the site points)");
       break;
 
     case "registration_setting_changed":
@@ -145,7 +145,7 @@ export function scoreEvent(e) {
       break;
 
     case "cron_added":
-      add(12, "Scheduled job added (common persistence trick)");
+      add(12, "Scheduled job added (runs without a logged-in user)");
       break;
     case "cron_modified":
       add(8, "Scheduled job modified");
@@ -156,7 +156,7 @@ export function scoreEvent(e) {
 
     case "redirect_created":
     case "redirect_modified":
-      add(22, "Redirect added (traffic hijacking risk)");
+      add(22, "Redirect added (where visitors are sent)");
       break;
     case "unexpected_redirect":
       add(28, "Unexpected redirect detected");
@@ -166,14 +166,14 @@ export function scoreEvent(e) {
       break;
 
     case "smtp_setting_changed":
-      add(15, "SMTP settings changed (phishing/spam risk)");
+      add(15, "SMTP settings changed (where outbound mail is delivered)");
       break;
     case "mail_failure":
       add(8, "Mail delivery failure");
       break;
 
     case "dns_record_changed":
-      add(28, "DNS record changed (traffic hijacking risk)");
+      add(28, "DNS record changed (where the domain resolves)");
       break;
 
     case "ssl_invalid":

@@ -21,6 +21,7 @@ import crypto from 'crypto';
 import fs from 'fs';
 import http from 'http';
 import { classifyEntryPoint, ENTRY_POINT_TYPES } from '../../src/lib/blackbox/entrypoint.js';
+import { scoreEvent } from '../../src/lib/blackbox/scoring.js';
 import {
   buildRemediationPlan,
   buildPrevention,
@@ -202,6 +203,41 @@ check('No code path still emits an overclaiming label',
   !/Compromised Admin Account|Configuration Hijack|Vulnerable (Plugin|Theme)|Malicious Plugin|Stolen Application/i.test(entrySource));
 check('No classifier output claims vulnerability, malice or theft',
   ![plugin, themeEntry, appPwd, install].some((e) => /vulnerable|malicious|stolen/i.test(`${e.label} ${e.headline}`)));
+
+/* ------------------------------------------- Per-event reasons describe activity */
+console.log('\nPer-event reasons (unit)');
+
+// scoreEvent's reasons are not rendered today, but they are the per-event
+// explanation an evidence view would surface, and the wording rule applies to
+// them now rather than when someone wires them up.
+const reasonProbes = [
+  { type: 'siteurl_changed', category: 'config', changes: { from: 'https://a.example', to: 'https://b.example' } },
+  { type: 'home_changed', category: 'config', changes: { from: 'https://a.example', to: 'https://b.example' } },
+  { type: 'redirect_created', category: 'config', target: { pattern: '/go' } },
+  { type: 'dns_record_changed', category: 'config', target: { name: 'a.example' } },
+  { type: 'smtp_setting_changed', category: 'config', target: { key: 'smtp_host' } },
+  { type: 'cron_added', category: 'cron', target: { hook: 'wp_daily_sync' } },
+  { type: 'executable_created', category: 'file', path: '/wp-content/uploads/2026/03/x.php' },
+  { type: 'administrator_created', category: 'user', target: { username: 'mallory' } },
+  { type: 'core_file_mismatch', category: 'file', path: '/wp-includes/load.php' },
+];
+const allReasons = reasonProbes.flatMap((e, i) => scoreEvent({ eventId: `r${i}`, timestamp: at(0), ...e }).flags);
+check('Every probed event type produces at least one reason', allReasons.length >= reasonProbes.length, String(allReasons.length));
+check('No per-event reason asserts motive, malice or a known attack',
+  !allReasons.some((r) => /\b(hijack\w*|phishing|spam|malicious|malware|backdoor|exploit\w*|stolen|vulnerable|persistence trick|attacker)\b/i.test(r)),
+  JSON.stringify(allReasons.filter((r) => /\b(hijack\w*|phishing|spam|malicious|malware|backdoor|exploit\w*|stolen|vulnerable|persistence trick|attacker)\b/i.test(r))));
+check('A configuration change explains its consequence, not an intent',
+  scoreEvent({ eventId: 'r1', timestamp: at(0), type: 'siteurl_changed', category: 'config' }).flags.some((f) => /where the site points/.test(f)),
+  JSON.stringify(scoreEvent({ eventId: 'r1', timestamp: at(0), type: 'siteurl_changed', category: 'config' }).flags));
+check('A new cron job is described by what it does, not as a persistence trick',
+  scoreEvent({ eventId: 'r2', timestamp: at(0), type: 'cron_added', category: 'cron' }).flags.some((f) => /without a logged-in user/.test(f)),
+  JSON.stringify(scoreEvent({ eventId: 'r2', timestamp: at(0), type: 'cron_added', category: 'cron' }).flags));
+// Rewording must not silently reweight the detector.
+const weights = { siteurl_changed: 32, cron_added: 12, redirect_created: 22, smtp_setting_changed: 15, dns_record_changed: 28 };
+for (const [type, expected] of Object.entries(weights)) {
+  const got = scoreEvent({ eventId: 'w', timestamp: at(0), type, category: 'config' }).score;
+  check(`Rewording left the ${type} weight at ${expected}`, got === expected, String(got));
+}
 
 /* --------------------------------------------- Unknown Entry Point stays */
 console.log('\nUnknown Entry Point (unit)');
