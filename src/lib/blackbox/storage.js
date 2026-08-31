@@ -1,0 +1,518 @@
+/**
+ * ScanSite Black Box — storage layer.
+ *
+ * The ONLY module in the app that touches persistence. Nothing else may read
+ * or write JSON files directly, so this driver can be swapped for PostgreSQL
+ * (or anything else) without changing the analysis engine or the UI.
+ *
+ * Driver: JSON files under /data/blackbox, with an automatic in-memory
+ * fallback when the filesystem is not writable (read-only containers, etc.).
+ *
+ * Every function is async so a database driver can be dropped in unchanged.
+ */
+
+import { promises as fs } from "fs";
+import path from "path";
+
+const DATA_DIR =
+  process.env.BLACKBOX_DATA_DIR || path.join(process.cwd(), "data", "blackbox");
+
+const FILES = {
+  sites: path.join(DATA_DIR, "sites.json"),
+  events: path.join(DATA_DIR, "events.json"),
+  incidents: path.join(DATA_DIR, "incidents.json"),
+  connections: path.join(DATA_DIR, "connections.json"),
+  files: path.join(DATA_DIR, "files.json"),
+  fileScans: path.join(DATA_DIR, "file-scans.json"),
+  trusted: path.join(DATA_DIR, "trusted-files.json"),
+  audit: path.join(DATA_DIR, "audit.json"),
+};
+
+const LIMITS = {
+  events: 5000, // keep the newest N events
+  incidents: 1000,
+  files: 50000, // per-site file records for the local MVP
+  fileScans: 200,
+  trusted: 5000,
+  audit: 2000,
+};
+
+/* ------------------------------------------------------------------ *
+ * Driver plumbing
+ * ------------------------------------------------------------------ */
+
+/** In-memory fallback store, keyed by collection name. */
+const memory = new Map();
+let usingMemory = false;
+
+/** Serialises writes per file so concurrent requests cannot interleave. */
+const locks = new Map();
+
+function withLock(key, fn) {
+  const prev = locks.get(key) ?? Promise.resolve();
+  const next = prev.then(fn, fn);
+  locks.set(
+    key,
+    next.catch(() => {})
+  );
+  return next;
+}
+
+export function storageInfo() {
+  return {
+    driver: usingMemory ? "memory" : "json-file",
+    dir: DATA_DIR,
+    // Surface the fallback loudly so a read-only deployment is obvious instead
+    // of silently losing data on restart.
+    warning: usingMemory
+      ? "Filesystem is not writable — running on in-memory storage. Data will be LOST on restart. Deploy on a host with persistent disk."
+      : null,
+  };
+}
+
+async function readCollection(name) {
+  if (usingMemory) return memory.get(name) ?? [];
+
+  try {
+    const raw = await fs.readFile(FILES[name], "utf8");
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (err) {
+    if (err.code === "ENOENT") return [];
+    // Corrupt or unreadable — fall back to memory rather than crash.
+    console.error(`[blackbox] cannot read ${name}:`, err.message);
+    usingMemory = true;
+    return memory.get(name) ?? [];
+  }
+}
+
+async function writeCollection(name, rows) {
+  const capped = applyLimit(name, rows);
+  memory.set(name, capped);
+
+  if (usingMemory) return capped;
+
+  try {
+    await fs.mkdir(DATA_DIR, { recursive: true });
+    const target = FILES[name];
+    const tmp = `${target}.tmp`;
+    // Keep the previous good copy so a torn write never destroys data.
+    try {
+      await fs.copyFile(target, `${target}.bak`);
+    } catch {
+      /* first write — nothing to back up */
+    }
+    // Atomic: write to a temp file, then rename over the target.
+    await fs.writeFile(tmp, JSON.stringify(capped, null, 2), "utf8");
+    await fs.rename(tmp, target);
+  } catch (err) {
+    if (!usingMemory) {
+      console.error(
+        `[blackbox] filesystem not writable (${err.message}); using in-memory storage`
+      );
+    }
+    usingMemory = true;
+  }
+
+  return capped;
+}
+
+function applyLimit(name, rows) {
+  const limit = LIMITS[name];
+  if (!limit || rows.length <= limit) return rows;
+  // Events are append-ordered; incidents are newest-first.
+  return name === "events" ? rows.slice(rows.length - limit) : rows.slice(0, limit);
+}
+
+function mutate(name, fn) {
+  return withLock(name, async () => {
+    const rows = await readCollection(name);
+    const result = fn(rows);
+    await writeCollection(name, result.rows);
+    return result.value;
+  });
+}
+
+/* ------------------------------------------------------------------ *
+ * Sites
+ * ------------------------------------------------------------------ */
+
+export async function getSites() {
+  const rows = await readCollection("sites");
+  return [...rows].sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
+}
+
+export async function getSiteById(id) {
+  const rows = await readCollection("sites");
+  return rows.find((s) => s.id === id) ?? null;
+}
+
+export async function createSite(site) {
+  return mutate("sites", (rows) => {
+    rows.push(site);
+    return { rows, value: site };
+  });
+}
+
+export async function updateSite(id, data) {
+  return mutate("sites", (rows) => {
+    const i = rows.findIndex((s) => s.id === id);
+    if (i === -1) return { rows, value: null };
+    rows[i] = { ...rows[i], ...data, id };
+    return { rows, value: rows[i] };
+  });
+}
+
+export async function deleteSite(id) {
+  return mutate("sites", (rows) => {
+    const next = rows.filter((s) => s.id !== id);
+    return { rows: next, value: next.length !== rows.length };
+  });
+}
+
+/* ------------------------------------------------------------------ *
+ * Events
+ * ------------------------------------------------------------------ */
+
+export async function getEvents(limit = 200) {
+  const rows = await readCollection("events");
+  return rows.slice(-limit).reverse();
+}
+
+export async function getEventsBySite(siteId, limit = 200) {
+  const rows = await readCollection("events");
+  return rows
+    .filter((e) => e.siteId === siteId)
+    .slice(-limit)
+    .reverse();
+}
+
+export async function saveEvent(event) {
+  const [saved] = await saveEvents([event]);
+  return saved ?? null;
+}
+
+/**
+ * Append events, skipping any whose eventId has already been seen for the
+ * site. Returns the events that were actually stored.
+ */
+export async function saveEvents(events) {
+  return mutate("events", (rows) => {
+    const seen = new Set(
+      rows.map((e) => (e.eventId ? `${e.siteId}:${e.eventId}` : null)).filter(Boolean)
+    );
+
+    const stored = [];
+    for (const event of events) {
+      const key = event.eventId ? `${event.siteId}:${event.eventId}` : null;
+      if (key && seen.has(key)) continue; // duplicate delivery — ignore
+      if (key) seen.add(key);
+      rows.push(event);
+      stored.push(event);
+    }
+
+    return { rows, value: stored };
+  });
+}
+
+export async function hasEventId(siteId, eventId) {
+  if (!eventId) return false;
+  const rows = await readCollection("events");
+  return rows.some((e) => e.siteId === siteId && e.eventId === eventId);
+}
+
+/* ------------------------------------------------------------------ *
+ * Incidents
+ * ------------------------------------------------------------------ */
+
+export async function getIncidents(limit = 200) {
+  const rows = await readCollection("incidents");
+  return [...rows]
+    .sort((a, b) => (b.startedAt ?? 0) - (a.startedAt ?? 0))
+    .slice(0, limit);
+}
+
+export async function getIncidentsBySite(siteId, limit = 200) {
+  const rows = await readCollection("incidents");
+  return rows
+    .filter((i) => i.siteId === siteId)
+    .sort((a, b) => (b.startedAt ?? 0) - (a.startedAt ?? 0))
+    .slice(0, limit);
+}
+
+export async function getIncidentById(id) {
+  const rows = await readCollection("incidents");
+  return rows.find((i) => i.id === id) ?? null;
+}
+
+export async function saveIncident(incident) {
+  return mutate("incidents", (rows) => {
+    const i = rows.findIndex((r) => r.id === incident.id);
+    if (i === -1) rows.push(incident);
+    else rows[i] = incident;
+    return { rows, value: incident };
+  });
+}
+
+export async function updateIncident(id, data) {
+  return mutate("incidents", (rows) => {
+    const i = rows.findIndex((r) => r.id === id);
+    if (i === -1) return { rows, value: null };
+    rows[i] = { ...rows[i], ...data, id };
+    return { rows, value: rows[i] };
+  });
+}
+
+export async function deleteIncidentsBySite(siteId) {
+  return mutate("incidents", (rows) => {
+    const next = rows.filter((i) => i.siteId !== siteId);
+    return { rows: next, value: rows.length - next.length };
+  });
+}
+
+export async function deleteEventsBySite(siteId) {
+  return mutate("events", (rows) => {
+    const next = rows.filter((e) => e.siteId !== siteId);
+    return { rows: next, value: rows.length - next.length };
+  });
+}
+
+/* ------------------------------------------------------------------ *
+ * Connections (pairing codes + collector credentials)
+ * ------------------------------------------------------------------ */
+
+export async function getConnections() {
+  return readCollection("connections");
+}
+
+export async function getConnection(siteId) {
+  const rows = await readCollection("connections");
+  return rows.find((c) => c.siteId === siteId) ?? null;
+}
+
+export async function getConnectionByCode(code) {
+  const rows = await readCollection("connections");
+  return rows.find((c) => c.code === code) ?? null;
+}
+
+/**
+ * Write connection data as a PATCH, never as a whole-row replace.
+ *
+ * Callers used to spread a previously-read row back in, which silently
+ * reverted fields another call had just written — a used pairing code could be
+ * replayed because `codeUsed` was overwritten with a stale `false`. Merging
+ * only the keys a caller actually names makes that impossible.
+ */
+export async function saveConnection(siteId, patch) {
+  return mutate("connections", (rows) => {
+    const i = rows.findIndex((c) => c.siteId === siteId);
+
+    if (i === -1) {
+      const created = { siteId, ...patch };
+      rows.push(created);
+      return { rows, value: created };
+    }
+
+    rows[i] = { ...rows[i], ...patch, siteId };
+    return { rows, value: rows[i] };
+  });
+}
+
+/** Explicit field-level patch. */
+export async function updateConnection(siteId, patch) {
+  return mutate("connections", (rows) => {
+    const i = rows.findIndex((c) => c.siteId === siteId);
+    if (i === -1) return { rows, value: null };
+    rows[i] = { ...rows[i], ...patch, siteId };
+    return { rows, value: rows[i] };
+  });
+}
+
+export async function deleteConnection(siteId) {
+  return mutate("connections", (rows) => {
+    const next = rows.filter((c) => c.siteId !== siteId);
+    return { rows: next, value: next.length !== rows.length };
+  });
+}
+
+/* ------------------------------------------------------------------ *
+ * File integrity records
+ * ------------------------------------------------------------------ */
+
+export async function getFiles() {
+  return readCollection("files");
+}
+
+export async function getFilesBySite(siteId) {
+  const rows = await readCollection("files");
+  return rows
+    .filter((f) => f.siteId === siteId)
+    .sort((a, b) => (b.riskScore ?? 0) - (a.riskScore ?? 0));
+}
+
+export async function getFileById(siteId, fileId) {
+  const rows = await readCollection("files");
+  return rows.find((f) => f.siteId === siteId && f.id === fileId) ?? null;
+}
+
+/**
+ * Upsert a file record keyed by siteId + relativePath, preserving a short
+ * modification history so the detail page can show before/after hashes.
+ */
+export async function upsertFile(siteId, record) {
+  return mutate("files", (rows) => {
+    const i = rows.findIndex(
+      (f) => f.siteId === siteId && f.relativePath === record.relativePath,
+    );
+
+    if (i === -1) {
+      const created = {
+        id: record.id ?? `file_${hashId(siteId + record.relativePath)}`,
+        siteId,
+        relatedEvents: [],
+        history: [],
+        ...record,
+      };
+      rows.push(created);
+      return { rows, value: created };
+    }
+
+    const prev = rows[i];
+    const changed = prev.sha256 && record.sha256 && prev.sha256 !== record.sha256;
+    const merged = {
+      ...prev,
+      ...record,
+      id: prev.id,
+      siteId,
+      previousSha256: changed ? prev.sha256 : prev.previousSha256 ?? null,
+      firstSeenAt: prev.firstSeenAt ?? record.firstSeenAt,
+      relatedEvents: prev.relatedEvents ?? [],
+      history: [
+        ...(prev.history ?? []),
+        ...(changed
+          ? [{ at: record.modifiedAt ?? Date.now(), sha256: record.sha256, status: record.integrityStatus }]
+          : []),
+      ].slice(-20),
+    };
+    rows[i] = merged;
+    return { rows, value: merged };
+  });
+}
+
+export async function addFileEventRef(siteId, relativePath, eventId) {
+  return mutate("files", (rows) => {
+    const i = rows.findIndex(
+      (f) => f.siteId === siteId && f.relativePath === relativePath,
+    );
+    if (i === -1) return { rows, value: null };
+    const related = new Set(rows[i].relatedEvents ?? []);
+    related.add(eventId);
+    rows[i] = { ...rows[i], relatedEvents: [...related].slice(-50) };
+    return { rows, value: rows[i] };
+  });
+}
+
+export async function deleteFilesForSite(siteId) {
+  return mutate("files", (rows) => {
+    const next = rows.filter((f) => f.siteId !== siteId);
+    return { rows: next, value: next.length !== rows.length };
+  });
+}
+
+export async function addScan(record) {
+  return mutate("fileScans", (rows) => {
+    rows.unshift(record);
+    return { rows, value: record };
+  });
+}
+
+export async function getScansBySite(siteId, limit = 20) {
+  const rows = await readCollection("fileScans");
+  return rows.filter((s) => s.siteId === siteId).slice(0, limit);
+}
+
+function hashId(input) {
+  // Non-cryptographic, stable identifier for file records.
+  let h = 0;
+  for (let i = 0; i < input.length; i++) {
+    h = (Math.imul(31, h) + input.charCodeAt(i)) | 0;
+  }
+  return (h >>> 0).toString(16).padStart(8, "0");
+}
+
+/* ------------------------------------------------------------------ *
+ * Trusted files (path + SHA-256). Trust expires when the hash changes.
+ * ------------------------------------------------------------------ */
+
+export async function getTrustedFiles() {
+  return readCollection("trusted");
+}
+
+export async function getTrustedBySite(siteId) {
+  const rows = await readCollection("trusted");
+  return rows.filter((t) => t.siteId === siteId);
+}
+
+export async function findTrusted(siteId, relativePath) {
+  const rows = await readCollection("trusted");
+  return rows.find((t) => t.siteId === siteId && t.relativePath === relativePath) ?? null;
+}
+
+export async function addTrustedFile(siteId, { relativePath, sha256, reason }) {
+  return mutate("trusted", (rows) => {
+    const i = rows.findIndex((t) => t.siteId === siteId && t.relativePath === relativePath);
+    const rec = {
+      siteId,
+      relativePath,
+      sha256,
+      reason: reason ?? null,
+      createdAt: Date.now(),
+      expired: false,
+    };
+    if (i >= 0) {
+      rows[i] = { ...rows[i], ...rec };
+      return { rows, value: rows[i] };
+    }
+    const created = { id: `trust_${hashId(siteId + relativePath)}`, ...rec };
+    rows.push(created);
+    return { rows, value: created };
+  });
+}
+
+/** Mark a trusted entry expired (hash changed) without deleting the record. */
+export async function expireTrusted(id) {
+  return mutate("trusted", (rows) => {
+    const i = rows.findIndex((t) => t.id === id);
+    if (i === -1) return { rows, value: null };
+    rows[i] = { ...rows[i], expired: true, expiredAt: Date.now() };
+    return { rows, value: rows[i] };
+  });
+}
+
+export async function removeTrustedFile(id) {
+  return mutate("trusted", (rows) => {
+    const next = rows.filter((t) => t.id !== id);
+    return { rows: next, value: next.length !== rows.length };
+  });
+}
+
+/* ------------------------------------------------------------------ *
+ * Management audit log (local, append-only).
+ * ------------------------------------------------------------------ */
+
+export async function getAudit(limit = 200) {
+  const rows = await readCollection("audit");
+  return rows.slice(-limit).reverse();
+}
+
+export async function recordAudit(entry) {
+  return mutate("audit", (rows) => {
+    const rec = {
+      id: `aud_${hashId(String(Date.now()) + (entry.action ?? "") + Math.random())}`,
+      at: Date.now(),
+      ...entry,
+    };
+    rows.push(rec);
+    return { rows, value: rec };
+  });
+}

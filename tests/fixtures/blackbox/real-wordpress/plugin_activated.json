@@ -1,0 +1,29 @@
+{
+  "eventId": "evt_6b0254fdfaf5e2c3",
+  "siteId": "site_example000000",
+  "category": "plugin",
+  "type": "plugin_activated",
+  "timestamp": 1788178063000,
+  "severityHint": null,
+  "actor": {
+    "userId": 1,
+    "username": "example_admin",
+    "role": "administrator",
+    "ip": "192.0.2.10"
+  },
+  "target": {
+    "plugin": "lab-test-plugin/lab-test-plugin.php",
+    "name": "Lab Test Plugin"
+  },
+  "metadata": [],
+  "receivedAt": 1788178063407,
+  "riskScore": 10,
+  "riskBand": "info",
+  "incident": {
+    "id": "inc_7f7f5015f172",
+    "title": "Suspicious executable after privilege escalation",
+    "severity": "critical",
+    "riskScore": 100,
+    "status": "new"
+  }
+}

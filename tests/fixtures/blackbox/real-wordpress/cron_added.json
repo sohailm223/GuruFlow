@@ -1,0 +1,34 @@
+{
+  "eventId": "evt_982526dbbb6cf42e",
+  "siteId": "site_example000000",
+  "category": "cron",
+  "type": "cron_added",
+  "timestamp": 1788178063000,
+  "severityHint": null,
+  "actor": {
+    "userId": 1,
+    "username": "example_admin",
+    "role": "administrator",
+    "ip": "192.0.2.10"
+  },
+  "target": {
+    "hook": "scenario_maintenance_hook",
+    "name": "scenario_maintenance_hook"
+  },
+  "metadata": {
+    "schedule": "hourly",
+    "nextRun": "2026-08-31T13:07:43+00:00",
+    "argCount": 0,
+    "argsHash": null
+  },
+  "receivedAt": 1788178063407,
+  "riskScore": 14,
+  "riskBand": "info",
+  "incident": {
+    "id": "inc_7f7f5015f172",
+    "title": "Suspicious executable after privilege escalation",
+    "severity": "critical",
+    "riskScore": 100,
+    "status": "new"
+  }
+}

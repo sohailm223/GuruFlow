@@ -1,0 +1,36 @@
+{
+  "eventId": "evt_7b246102eeb5be61",
+  "siteId": "site_example000000",
+  "category": "file",
+  "type": "executable_created",
+  "timestamp": 1788178063000,
+  "severityHint": null,
+  "actor": {
+    "userId": 1,
+    "username": "example_admin",
+    "role": "administrator",
+    "ip": "192.0.2.10"
+  },
+  "target": {
+    "name": "scenario-probe.php",
+    "path": "/wp-content/uploads/scenario-probe.php"
+  },
+  "path": "/wp-content/uploads/scenario-probe.php",
+  "metadata": {
+    "extension": ".php",
+    "executable": true,
+    "sha256": "0d67cfbd5229eec81a2bdb0d0ba1f6ce3dea1ce07afa38689512898315c94189",
+    "bytes": 68,
+    "permissions": "0666"
+  },
+  "receivedAt": 1788178063407,
+  "riskScore": 77,
+  "riskBand": "high",
+  "incident": {
+    "id": "inc_7f7f5015f172",
+    "title": "Suspicious executable after privilege escalation",
+    "severity": "critical",
+    "riskScore": 100,
+    "status": "new"
+  }
+}

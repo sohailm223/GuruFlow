@@ -1,0 +1,960 @@
+{
+  "environment": {
+    "wordpress": "6.8.3",
+    "php": "8.3.32",
+    "phpSapi": "wasm",
+    "dbVersion": "8.0",
+    "dbClass": "WP_SQLite_DB",
+    "collector": "0.2.0",
+    "phpWasm": "^3.1.51"
+  },
+  "connection": [
+    {
+      "name": "Plugin activates without fatal error",
+      "pass": true,
+      "detail": "WordPress 6.8.3 loaded the collector"
+    },
+    {
+      "name": "Pairing code accepted by ScanSite",
+      "pass": true,
+      "detail": "siteId=site_aac74b"
+    },
+    {
+      "name": "Collector key stored in WordPress",
+      "pass": true,
+      "detail": "len=70 prefix=sk_bb_"
+    },
+    {
+      "name": "Connection state became connected",
+      "pass": true,
+      "detail": "state=connected"
+    },
+    {
+      "name": "ScanSite marks site connected",
+      "pass": true,
+      "detail": "connected"
+    },
+    {
+      "name": "Admin menu appears",
+      "pass": true,
+      "detail": "menu slugs=[\"scansite-blackbox\"]"
+    },
+    {
+      "name": "Collector key not displayed again",
+      "pass": true,
+      "detail": "rawKey=false prefix=false"
+    },
+    {
+      "name": "Connection screen renders",
+      "pass": true,
+      "detail": "8522 bytes of HTML"
+    },
+    {
+      "name": "Heartbeat reaches ScanSite",
+      "pass": true,
+      "detail": "lastSeenAt 1788183688057 -> 1788183688829"
+    },
+    {
+      "name": "Heartbeat reports real versions",
+      "pass": true,
+      "detail": "wp=6.8.3 php=8.3.32 collector=0.2.0"
+    },
+    {
+      "name": "Send Test Event reaches ScanSite",
+      "pass": true,
+      "detail": "run_connection_test() returned true"
+    },
+    {
+      "name": "ScanSite verify confirms receipt",
+      "pass": true,
+      "detail": "{\"api\":\"working\",\"authentication\":\"verified\",\"eventDelivery\":\"working\",\"collector\":\"active\"}"
+    },
+    {
+      "name": "Invalid pairing code rejected",
+      "pass": true,
+      "detail": "Invalid or expired connection code"
+    },
+    {
+      "name": "Already-used pairing code rejected",
+      "pass": true,
+      "detail": "This connection code has already been used"
+    },
+    {
+      "name": "Expired pairing code rejected",
+      "pass": true,
+      "detail": "Invalid or expired connection code"
+    },
+    {
+      "name": "Wrong ScanSite endpoint fails gracefully",
+      "pass": true,
+      "detail": "ScanSite could not be reached from this website."
+    },
+    {
+      "name": "Invalid collector key rejected",
+      "pass": true,
+      "detail": "401 Invalid collector credentials"
+    },
+    {
+      "name": "Disconnected site stops delivery",
+      "pass": true,
+      "detail": "state=error msg=This website was disconnected in ScanSite."
+    },
+    {
+      "name": "Reconnect restores the collector",
+      "pass": true,
+      "detail": "new code redeemed from WordPress"
+    },
+    {
+      "name": "No PHP notices/warnings during connection flow",
+      "pass": true,
+      "detail": "clean"
+    }
+  ],
+  "matrix": [
+    {
+      "event": "login_success",
+      "tested": "Yes",
+      "detected": "Yes",
+      "payloadCorrect": "Yes",
+      "duplicates": "No",
+      "notes": "actor=labadmin/administrator ip=203.0.113.9 all=login_success"
+    },
+    {
+      "event": "login_failed",
+      "tested": "Yes",
+      "detected": "Yes",
+      "payloadCorrect": "Yes",
+      "duplicates": "No",
+      "notes": "single attempt -> login_failed"
+    },
+    {
+      "event": "login_failed_burst",
+      "tested": "Yes",
+      "detected": "Yes",
+      "payloadCorrect": "Yes",
+      "duplicates": "No",
+      "notes": "10 attempts -> 4 events total (count=10, window=5m, ips=1)"
+    },
+    {
+      "event": "user_created",
+      "tested": "Yes",
+      "detected": "Yes",
+      "payloadCorrect": "Yes",
+      "duplicates": "No",
+      "notes": "role=subscriber actor=labadmin events=user_created"
+    },
+    {
+      "event": "administrator_created",
+      "tested": "Yes",
+      "detected": "Yes",
+      "payloadCorrect": "Yes",
+      "duplicates": "No",
+      "notes": "events=administrator_created"
+    },
+    {
+      "event": "user_role_changed",
+      "tested": "Yes",
+      "detected": "Yes",
+      "payloadCorrect": "Yes",
+      "duplicates": "No",
+      "notes": "administrator_created: subscriber -> administrator (all: administrator_created)"
+    },
+    {
+      "event": "user_deleted",
+      "tested": "Yes",
+      "detected": "Yes",
+      "payloadCorrect": "Yes",
+      "duplicates": "No",
+      "notes": "username=test_admin role=administrator userId=18"
+    },
+    {
+      "event": "logout",
+      "tested": "Yes",
+      "detected": "Yes",
+      "payloadCorrect": "Yes",
+      "duplicates": "No",
+      "notes": "events=logout"
+    },
+    {
+      "event": "password_reset",
+      "tested": "Yes",
+      "detected": "Yes",
+      "payloadCorrect": "Yes",
+      "duplicates": "No",
+      "notes": "events=password_reset"
+    },
+    {
+      "event": "registration_setting_changed",
+      "tested": "Yes",
+      "detected": "Yes",
+      "payloadCorrect": "Yes",
+      "duplicates": "No",
+      "notes": "events=registration_setting_changed,registration_setting_changed"
+    },
+    {
+      "event": "siteurl_changed",
+      "tested": "Yes",
+      "detected": "Yes",
+      "payloadCorrect": "Yes",
+      "duplicates": "No",
+      "notes": "2 events (change + restore): siteurl_changed,siteurl_changed"
+    },
+    {
+      "event": "home_changed",
+      "tested": "Yes",
+      "detected": "Yes",
+      "payloadCorrect": "Yes",
+      "duplicates": "No",
+      "notes": "2 events (change + restore): home_changed,home_changed"
+    },
+    {
+      "event": "cron_added",
+      "tested": "Yes",
+      "detected": "Yes",
+      "payloadCorrect": "Yes",
+      "duplicates": "No",
+      "notes": "hook=lab_test_hook schedule=hourly nextRun=2026-08-31T14:41:38+00:00"
+    },
+    {
+      "event": "cron_removed",
+      "tested": "Yes",
+      "detected": "Yes",
+      "payloadCorrect": "Yes",
+      "duplicates": "No",
+      "notes": "events=cron_removed"
+    },
+    {
+      "event": "htaccess_modified",
+      "tested": "Yes",
+      "detected": "Yes",
+      "payloadCorrect": "Yes",
+      "duplicates": "No",
+      "notes": "path=/.htaccess sha256=e4cd6935efd6… contents sent=no"
+    },
+    {
+      "event": "wp_config_modified",
+      "tested": "Yes",
+      "detected": "Yes",
+      "payloadCorrect": "Yes",
+      "duplicates": "No",
+      "notes": "sha256=944d5220f741… secrets sent=no"
+    },
+    {
+      "event": "executable_created",
+      "tested": "Yes",
+      "detected": "Yes",
+      "payloadCorrect": "Yes",
+      "duplicates": "No",
+      "notes": "path=/wp-content/uploads/scansite-lab-probe.php ext=.php bytes=65 perms=0666 hash=935bb7e108… code sent=no"
+    },
+    {
+      "event": "file_modified",
+      "tested": "Yes",
+      "detected": "Yes",
+      "payloadCorrect": "Yes",
+      "duplicates": "No",
+      "notes": "events=file_modified"
+    },
+    {
+      "event": "file_deleted",
+      "tested": "Yes",
+      "detected": "Yes",
+      "payloadCorrect": "Yes",
+      "duplicates": "No",
+      "notes": "events=file_deleted"
+    },
+    {
+      "event": "plugin_activated",
+      "tested": "Yes",
+      "detected": "Yes",
+      "payloadCorrect": "Yes",
+      "duplicates": "No",
+      "notes": "actor=labadmin all=plugin_activated"
+    },
+    {
+      "event": "active_plugins_changed",
+      "tested": "Yes",
+      "detected": "Yes",
+      "payloadCorrect": "Yes",
+      "duplicates": "No",
+      "notes": "activation emits 0 duplicate(s); direct option rewrite emits 1"
+    },
+    {
+      "event": "plugin_deactivated",
+      "tested": "Yes",
+      "detected": "Yes",
+      "payloadCorrect": "Yes",
+      "duplicates": "No",
+      "notes": "name=Lab Test Plugin all=plugin_deactivated"
+    },
+    {
+      "event": "plugin_deleted",
+      "tested": "Yes",
+      "detected": "Yes",
+      "payloadCorrect": "Yes",
+      "duplicates": "No",
+      "notes": "target=lab-test-plugin/lab-test-plugin.php name still resolvable after removal=yes"
+    },
+    {
+      "event": "theme_activated",
+      "tested": "Yes",
+      "detected": "Yes",
+      "payloadCorrect": "Yes",
+      "duplicates": "No",
+      "notes": "theme=lab-test-theme name=Lab Test Theme all=theme_activated"
+    },
+    {
+      "event": "theme_deleted",
+      "tested": "Yes",
+      "detected": "Yes",
+      "payloadCorrect": "Yes",
+      "duplicates": "No",
+      "notes": "events=theme_deleted"
+    },
+    {
+      "event": "plugin_installed",
+      "tested": "Yes",
+      "detected": "Yes",
+      "payloadCorrect": "Yes",
+      "duplicates": "No",
+      "notes": "plugin_installed slug=lab-test-plugin name=Lab Test Plugin to=1.0.0 from=(none, correct) | all=plugin_installed"
+    },
+    {
+      "event": "plugin_updated",
+      "tested": "Yes",
+      "detected": "Yes",
+      "payloadCorrect": "Yes",
+      "duplicates": "No",
+      "notes": "Lab Test Plugin lab-test-plugin 1.0.0 -> 1.0.1 | all=plugin_updated,active_plugins_changed"
+    },
+    {
+      "event": "php_error",
+      "tested": "Yes",
+      "detected": "Yes",
+      "payloadCorrect": "Yes",
+      "notes": "Fatal error in wp-content/plugins/scansite-error-probe/scansite-error-probe.php:9"
+    }
+  ],
+  "queue": [
+    {
+      "name": "Diagnostics runs inside WordPress",
+      "pass": true,
+      "detail": "13 checks"
+    },
+    {
+      "name": "Diagnostics reports config/credentials",
+      "pass": true,
+      "detail": "config=pass key=pass"
+    },
+    {
+      "name": "Diagnostics reports network reachability",
+      "pass": true,
+      "detail": "ScanSite responded."
+    },
+    {
+      "name": "Diagnostics reports auth + ingest",
+      "pass": true,
+      "detail": "auth=pass ingest=pass"
+    },
+    {
+      "name": "Diagnostics reports cron + queue + files",
+      "pass": true,
+      "detail": "cron=pass queue=pass files=pass"
+    },
+    {
+      "name": "Diagnostics status header has no secret",
+      "pass": true,
+      "detail": "keys=state,endpoint,siteId,collectorVersion,wordpressVersion,phpVersion,lastHeartbeat,lastDelivery,queuedEvents,failedDeliveries,signingMode,lastError"
+    },
+    {
+      "name": "Status header exposes the required fields",
+      "pass": true,
+      "detail": "collector=0.2.0 wp=6.8.3 php=8.3.32 signing=enabled"
+    },
+    {
+      "name": "Send Test Event works through the real pipeline",
+      "pass": true,
+      "detail": "delivered=true queueAfter=0 scanSiteReceived=true"
+    },
+    {
+      "name": "Admin screen shows diagnostics UI",
+      "pass": true,
+      "detail": "diagnostics=true runDiag=true sendTest=true retry=true"
+    },
+    {
+      "name": "Admin screen shows queue, signing, last error",
+      "pass": true,
+      "detail": "queue=true signing=true lastError=true"
+    },
+    {
+      "name": "Admin screen never prints the secret",
+      "pass": true,
+      "detail": "secretPresent=false"
+    },
+    {
+      "name": "No <form> nested inside <p>",
+      "pass": true,
+      "detail": "formInP=false"
+    },
+    {
+      "name": "Status panel renders with styles, pill and 4 tiles",
+      "pass": true,
+      "detail": "hero=true styles=true pill=true tiles=4"
+    },
+    {
+      "name": "Queue is capped at MAX_QUEUE",
+      "pass": true,
+      "detail": "size=1000 max=1000"
+    },
+    {
+      "name": "Oldest events are dropped, newest kept",
+      "pass": true,
+      "detail": "first=5 last=1004 (policy: keep newest)"
+    },
+    {
+      "name": "Events stay queued while ScanSite is unreachable",
+      "pass": true,
+      "detail": "queued=5"
+    },
+    {
+      "name": "Retry counter increments on failure",
+      "pass": true,
+      "detail": "attempts=1"
+    },
+    {
+      "name": "Offline failure produces a readable message",
+      "pass": true,
+      "detail": "ScanSite could not be reached from this website."
+    },
+    {
+      "name": "Delivery resumes automatically after an outage",
+      "pass": true,
+      "detail": "queued=0 state=connected"
+    },
+    {
+      "name": "No events lost across the outage",
+      "pass": true,
+      "detail": "ScanSite received 5/5"
+    },
+    {
+      "name": "Batch size is respected",
+      "pass": true,
+      "detail": "queued=73 after 1 flush=23 (batch=50)"
+    },
+    {
+      "name": "Remaining events deliver on the next run",
+      "pass": true,
+      "detail": "after 1 flush=23 (batch 50), after 2=0"
+    },
+    {
+      "name": "All batched events arrive at ScanSite",
+      "pass": true,
+      "detail": "received 73/73"
+    },
+    {
+      "name": "One bad event does not fail the whole batch",
+      "pass": true,
+      "detail": "validArrived=true queuedAfter=0"
+    },
+    {
+      "name": "Event capture is local and fast (no network)",
+      "pass": true,
+      "detail": "3 ms to enqueue"
+    },
+    {
+      "name": "admin_init file hashing stays cheap",
+      "pass": true,
+      "detail": "107 ms"
+    },
+    {
+      "name": "No secret-like keys or values in real payloads",
+      "pass": true,
+      "detail": "scanned 17 patterns across 1029 bytes"
+    },
+    {
+      "name": "Cron args are not transmitted (count + hash only)",
+      "pass": true,
+      "detail": "argCount=2 argsHash=d7acc8a4c641 rawArgsSent=false"
+    },
+    {
+      "name": "Sanitizer strips secret-shaped keys at any depth",
+      "pass": true,
+      "detail": "leaked=none keptSafe=keep-me keptNestedOk=42"
+    },
+    {
+      "name": "schemaVersion present on every event",
+      "pass": true,
+      "detail": "schemaVersion=1"
+    },
+    {
+      "name": "Timestamps are ISO 8601 UTC",
+      "pass": true,
+      "detail": "2026-08-31T13:42:58+00:00"
+    },
+    {
+      "name": "Server stores UTC (offset +00:00)",
+      "pass": true,
+      "detail": "2026-08-31T13:42:58+00:00"
+    },
+    {
+      "name": "eventId is unique",
+      "pass": true,
+      "detail": "uniqueIds=true"
+    },
+    {
+      "name": "IP comes from REMOTE_ADDR only",
+      "pass": true,
+      "detail": "ip=203.0.113.9 (REMOTE_ADDR was 203.0.113.9)"
+    },
+    {
+      "name": "Forwarded headers are not trusted",
+      "pass": true,
+      "detail": "recorded ip=203.0.113.9"
+    },
+    {
+      "name": "Every collector event type is accepted by ScanSite",
+      "pass": true,
+      "detail": "38/38 accepted"
+    },
+    {
+      "name": "Scenario: plugin event delivered",
+      "pass": true,
+      "detail": "cron_added, executable_created, administrator_created, plugin_activated"
+    },
+    {
+      "name": "Scenario: administrator_created delivered",
+      "pass": true,
+      "detail": "real wp_insert_user with role=administrator"
+    },
+    {
+      "name": "Scenario: executable_created delivered",
+      "pass": true,
+      "detail": "real .php written into wp-content/uploads"
+    },
+    {
+      "name": "Scenario: cron_added delivered",
+      "pass": true,
+      "detail": "real wp_schedule_event"
+    },
+    {
+      "name": "Scenario: every event has a unique ID",
+      "pass": true,
+      "detail": "4/4 unique"
+    },
+    {
+      "name": "Scenario: actor captured on admin actions",
+      "pass": true,
+      "detail": "actors=labadmin"
+    },
+    {
+      "name": "Scenario events grouped into an incident",
+      "pass": true,
+      "detail": "Suspicious executable after privilege escalation"
+    },
+    {
+      "name": "Incident evidence references real event IDs",
+      "pass": true,
+      "detail": "4 evidence refs resolved"
+    },
+    {
+      "name": "Incident chain references real event IDs",
+      "pass": true,
+      "detail": "8 chain refs resolved"
+    },
+    {
+      "name": "Real payload fixtures saved",
+      "pass": true,
+      "detail": "4 files"
+    },
+    {
+      "name": "Fixtures contain no real host, IP, username or key",
+      "pass": true,
+      "detail": "4 fixtures scanned"
+    }
+  ],
+  "privacy": [],
+  "performance": [
+    {
+      "name": "wp_insert_user with collector active",
+      "ms": 139
+    },
+    {
+      "name": "admin_init (config + uploads hashing)",
+      "ms": 107
+    },
+    {
+      "name": "update_option with collector active",
+      "ms": 3
+    },
+    {
+      "name": "enqueue one event (no network)",
+      "ms": 3
+    }
+  ],
+  "bugs": [],
+  "connectionPhpErrors": [],
+  "eventTypes": {
+    "emitted": [
+      "active_plugins_changed",
+      "administrator_created",
+      "application_password_created",
+      "application_password_deleted",
+      "collector_test",
+      "cron_added",
+      "cron_removed",
+      "executable_created",
+      "file_created",
+      "file_deleted",
+      "file_integrity_scan_completed",
+      "file_integrity_scan_failed",
+      "file_modified",
+      "htaccess_modified",
+      "login_failed",
+      "login_failed_burst",
+      "login_success",
+      "logout",
+      "password_reset",
+      "plugin_activated",
+      "plugin_deactivated",
+      "plugin_deleted",
+      "plugin_installed",
+      "plugin_updated",
+      "registration_setting_changed",
+      "site_inventory",
+      "suspicious_code_detected",
+      "theme_activated",
+      "theme_deleted",
+      "theme_installed",
+      "theme_updated",
+      "unexpected_executable",
+      "user_created",
+      "user_deleted",
+      "user_role_changed",
+      "users_snapshot",
+      "wordpress_updated",
+      "wp_config_modified"
+    ],
+    "accepted": [
+      "active_plugins_changed",
+      "administrator_created",
+      "application_password_created",
+      "application_password_deleted",
+      "collector_test",
+      "cron_added",
+      "cron_removed",
+      "executable_created",
+      "file_created",
+      "file_deleted",
+      "file_integrity_scan_completed",
+      "file_integrity_scan_failed",
+      "file_modified",
+      "htaccess_modified",
+      "login_failed",
+      "login_failed_burst",
+      "login_success",
+      "logout",
+      "password_reset",
+      "plugin_activated",
+      "plugin_deactivated",
+      "plugin_deleted",
+      "plugin_installed",
+      "plugin_updated",
+      "registration_setting_changed",
+      "site_inventory",
+      "suspicious_code_detected",
+      "theme_activated",
+      "theme_deleted",
+      "theme_installed",
+      "theme_updated",
+      "unexpected_executable",
+      "user_created",
+      "user_deleted",
+      "user_role_changed",
+      "users_snapshot",
+      "wordpress_updated",
+      "wp_config_modified"
+    ],
+    "rejected": []
+  },
+  "scenarioIncident": {
+    "title": "Suspicious executable after privilege escalation",
+    "severity": "critical",
+    "riskScore": 100,
+    "rawScore": 1675,
+    "confidence": 86,
+    "detectors": [
+      "priv-esc-then-backdoor",
+      "persistence"
+    ],
+    "chainLength": 8,
+    "evidence": 4
+  },
+  "fixtures": [
+    "plugin_activated.json",
+    "administrator_created.json",
+    "cron_added.json",
+    "executable_created.json"
+  ],
+  "errors": [
+    {
+      "name": "The error capture class loads inside WordPress",
+      "pass": true,
+      "detail": "class_exists=true"
+    },
+    {
+      "name": "Capture is gated on a connected website",
+      "pass": true,
+      "detail": "siteId=site_aac74b"
+    },
+    {
+      "name": "A real PHP error is captured",
+      "pass": true,
+      "detail": "php_error: Call to undefined method ScanSiteErrorProbe::method_that_does_not_exist()"
+    },
+    {
+      "name": "The message is recorded",
+      "pass": true,
+      "detail": "Call to undefined method ScanSiteErrorProbe::method_that_does_not_exist()"
+    },
+    {
+      "name": "The exact file path is recorded",
+      "pass": true,
+      "detail": "/home/user/GuruFlow/tests/wordpress-lab/wp/wp-content/plugins/scansite-error-probe/scansite-error-probe.php"
+    },
+    {
+      "name": "The exact line number is recorded",
+      "pass": true,
+      "detail": "line=9"
+    },
+    {
+      "name": "The relative path has no stray separators",
+      "pass": true,
+      "detail": "wp-content/plugins/scansite-error-probe/scansite-error-probe.php"
+    },
+    {
+      "name": "The severity is recorded",
+      "pass": true,
+      "detail": "severity=Fatal error"
+    },
+    {
+      "name": "The error class is recorded",
+      "pass": true,
+      "detail": "errorClass=Error"
+    },
+    {
+      "name": "The request path is recorded",
+      "pass": true,
+      "detail": "/wp-admin/"
+    },
+    {
+      "name": "The request method is recorded",
+      "pass": true,
+      "detail": "GET"
+    },
+    {
+      "name": "The PHP version is recorded",
+      "pass": true,
+      "detail": "php=8.3.32"
+    },
+    {
+      "name": "First/last seen are recorded",
+      "pass": true,
+      "detail": "first=1788183782 last=1788183782"
+    },
+    {
+      "name": "The actor is recorded when available",
+      "pass": true,
+      "detail": "actor=null"
+    },
+    {
+      "name": "The file is attributed to a plugin",
+      "pass": true,
+      "detail": "component=plugin"
+    },
+    {
+      "name": "The plugin slug is resolved",
+      "pass": true,
+      "detail": "slug=scansite-error-probe"
+    },
+    {
+      "name": "The plugin display name is resolved",
+      "pass": true,
+      "detail": "name=ScanSite Error Probe"
+    },
+    {
+      "name": "WordPress Core files are attributed to Core",
+      "pass": true,
+      "detail": "got=core"
+    },
+    {
+      "name": "Plugin files are attributed to Plugin",
+      "pass": true,
+      "detail": "got=plugin"
+    },
+    {
+      "name": "Must-use plugin files are attributed to MU Plugin",
+      "pass": true,
+      "detail": "got=mu_plugin"
+    },
+    {
+      "name": "Theme files are attributed to Theme",
+      "pass": true,
+      "detail": "got=theme name=Twenty Twenty-Five"
+    },
+    {
+      "name": "Upload files are attributed to Uploads",
+      "pass": true,
+      "detail": "got=uploads"
+    },
+    {
+      "name": "wp-config.php is attributed to Config",
+      "pass": true,
+      "detail": "got=config"
+    },
+    {
+      "name": "Files outside WordPress are attributed to External",
+      "pass": true,
+      "detail": "got=external"
+    },
+    {
+      "name": "An empty path degrades to Unknown, never a crash",
+      "pass": true,
+      "detail": "got=unknown"
+    },
+    {
+      "name": "Every attribution returns the same keys",
+      "pass": true,
+      "detail": "component/slug/name/relativePath present on all"
+    },
+    {
+      "name": "Capture makes no HTTP request",
+      "pass": true,
+      "detail": "outbound requests=0"
+    },
+    {
+      "name": "The error is queued locally instead",
+      "pass": true,
+      "detail": "queued=1"
+    },
+    {
+      "name": "The event survives the request that died",
+      "pass": true,
+      "detail": "1 error event(s) in the queue"
+    },
+    {
+      "name": "Delivery rides the existing WP-Cron flush",
+      "pass": true,
+      "detail": "flush scheduled=true"
+    },
+    {
+      "name": "A crash loop queues one event, not five",
+      "pass": true,
+      "detail": "queued=1"
+    },
+    {
+      "name": "The true total is kept in the throttle state",
+      "pass": true,
+      "detail": "count=5"
+    },
+    {
+      "name": "The queued event reports what it knew",
+      "pass": true,
+      "detail": "occurrences=1 totalSeen=1"
+    },
+    {
+      "name": "The next report carries the accumulated occurrences",
+      "pass": true,
+      "detail": "occurrences=5 (5 unseen of 6 total)"
+    },
+    {
+      "name": "First seen stays at the original occurrence",
+      "pass": true,
+      "detail": "first=1788183784 last=1788183784"
+    },
+    {
+      "name": "The total keeps climbing across reports",
+      "pass": true,
+      "detail": "totalSeen=6"
+    },
+    {
+      "name": "The same error on a different line is a separate group",
+      "pass": true,
+      "detail": "31fde450d0ff8e1cc6e9a3d8 vs be5d2f25fe0765014721fb18"
+    },
+    {
+      "name": "The same error in a different file is a separate group",
+      "pass": true,
+      "detail": "31fde450d0ff8e1cc6e9a3d8 vs a26bdefe16351df63b745a99"
+    },
+    {
+      "name": "A different severity is a separate group",
+      "pass": true,
+      "detail": "31fde450d0ff8e1cc6e9a3d8 vs dd0676e6a589e5ae888c4ecc"
+    },
+    {
+      "name": "The same error and line share one fingerprint",
+      "pass": true,
+      "detail": "len=24"
+    },
+    {
+      "name": "Volatile identifiers are normalised so repeats still group",
+      "pass": true,
+      "detail": "94dd37c9bd826fdde947b2fb === 94dd37c9bd826fdde947b2fb"
+    },
+    {
+      "name": "Memory addresses are normalised",
+      "pass": true,
+      "detail": "c10648d99afa4fd1878f256a === c10648d99afa4fd1878f256a"
+    },
+    {
+      "name": "No file contents are ever included",
+      "pass": true,
+      "detail": "metadata keys=fingerprint,kind,severity,errorClass,code,message,file,relativePath,line,component,componentSlug,componentName,occurrences,totalSeen,firstSeen,lastSeen,requestPath,requestMethod,phpVersion"
+    },
+    {
+      "name": "No credentials are included",
+      "pass": true,
+      "detail": "metadata keys=fingerprint,kind,severity,errorClass,code,message,file,relativePath,line,component,componentSlug,componentName,occurrences,totalSeen,firstSeen,lastSeen,requestPath,requestMethod,phpVersion"
+    },
+    {
+      "name": "The query string is not included in the request path",
+      "pass": true,
+      "detail": "requestPath=/wp-admin/"
+    },
+    {
+      "name": "The message is length-bounded",
+      "pass": true,
+      "detail": "len=73"
+    },
+    {
+      "name": "The flush reports its queue state",
+      "pass": true,
+      "detail": "QUEUE marker present=true"
+    },
+    {
+      "name": "The error leaves the queue on flush",
+      "pass": true,
+      "detail": "errors still queued=0"
+    },
+    {
+      "name": "ScanSite receives the error event",
+      "pass": true,
+      "detail": "received 1 error event(s)"
+    },
+    {
+      "name": "The delivered event keeps the file and line",
+      "pass": true,
+      "detail": "wp-content/plugins/scansite-error-probe/scansite-error-probe.php:9"
+    },
+    {
+      "name": "The delivered event keeps the component",
+      "pass": true,
+      "detail": "plugin/scansite-error-probe"
+    },
+    {
+      "name": "The delivered event keeps the fingerprint",
+      "pass": true,
+      "detail": "fingerprint=c67e57f13d17095fcda287e9"
+    }
+  ]
+}
