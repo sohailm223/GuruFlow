@@ -1,5 +1,7 @@
 import { json } from "../_lib";
 import { getEvents, getEventsBySite, getIncidentsBySite } from "@/lib/blackbox/storage";
+import { scoreEvent } from "@/lib/blackbox/scoring";
+import { severityFromScore } from "@/lib/blackbox/confidence";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -33,6 +35,9 @@ export async function GET(req) {
   const from = Number(searchParams.get("from") ?? 0) || 0;
   const to = Number(searchParams.get("to") ?? 0) || 0;
   const incidentId = searchParams.get("incident");
+  // Risk band of the single event, from the same scoring engine the analyzer
+  // uses — not a re-derivation.
+  const risk = (searchParams.get("risk") || "").toLowerCase();
 
   // Incident membership comes from the stored incidents, which is what the
   // correlation engine actually decided — not a re-derivation here.
@@ -57,6 +62,7 @@ export async function GET(req) {
       const name = (e.actor?.username || "").toLowerCase();
       if (!name.includes(actor)) return false;
     }
+    if (risk && riskBand(e) !== risk) return false;
     if (q) {
       if (!matchesQuery(e, q)) return false;
     }
@@ -67,13 +73,15 @@ export async function GET(req) {
   const page = filtered.slice(offset, offset + limit);
 
   const withCorrelation = searchParams.get("correlation") === "1";
+  const decorate = (e) => ({
+    ...e,
+    riskScore: scoreEvent(e).score,
+    riskBand: riskBand(e),
+    incident: incidentSummary(eventToIncident.get(e.eventId)),
+  });
   const events = withCorrelation
-    ? page.map((e) => ({
-        ...e,
-        correlation: correlationFor(e, working, eventToIncident),
-        incident: incidentSummary(eventToIncident.get(e.eventId)),
-      }))
-    : page.map((e) => ({ ...e, incident: incidentSummary(eventToIncident.get(e.eventId)) }));
+    ? page.map((e) => ({ ...decorate(e), correlation: correlationFor(e, working, eventToIncident) }))
+    : page.map(decorate);
 
   return json({
     events,
@@ -93,6 +101,11 @@ export async function GET(req) {
       actors: facets(working, (e) => e.actor?.username),
     },
   });
+}
+
+/** Single-event risk band, matching the incident severity scale. */
+function riskBand(e) {
+  return severityFromScore(scoreEvent(e).score).severity;
 }
 
 function matchesQuery(e, q) {

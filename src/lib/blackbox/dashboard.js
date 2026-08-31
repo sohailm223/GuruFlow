@@ -124,24 +124,86 @@ function buildNeedsAttention({ sites, incidents, files, now }) {
 }
 
 /** A short, friendly line for the recent-activity feed. */
-function buildActivity(events, now) {
-  const benign = new Set([
-    "plugin_updated",
-    "theme_updated",
-    "wordpress_updated",
-    "plugin_installed",
-    "login_success",
-    "logout",
-    "collector_test",
-  ]);
+/**
+ * Benign activity. These belong in Recent Activity as successes — never mixed
+ * into the incidents that need attention.
+ */
+const BENIGN_TYPES = new Set([
+  "plugin_updated",
+  "theme_updated",
+  "wordpress_updated",
+  "plugin_installed",
+  "theme_installed",
+  "login_success",
+  "logout",
+  "collector_test",
+  "file_integrity_scan_completed",
+]);
 
-  return events
-    .slice(0, 6)
-    .map((e) => ({
-      text: describeEvent(e),
+/** Success-flavoured wording for routine events, plain description otherwise. */
+function activityText(e) {
+  const name = e.target?.name ?? e.target?.plugin ?? e.target?.theme ?? e.target?.username;
+  const ver = e.changes?.from && e.changes?.to ? ` (${e.changes.from} → ${e.changes.to})` : "";
+
+  switch (e.type) {
+    case "plugin_updated":
+      return `Plugin "${name}" updated successfully${ver}`;
+    case "theme_updated":
+      return `Theme "${name}" updated successfully${ver}`;
+    case "wordpress_updated":
+      return `WordPress core updated successfully${ver}`;
+    case "file_integrity_scan_completed":
+      return `File integrity scan completed (${e.metadata?.filesChecked ?? 0} files checked, ${e.metadata?.critical ?? 0} critical)`;
+    case "collector_test":
+      return "Collector self-test received";
+    default:
+      return describeEvent(e);
+  }
+}
+
+/**
+ * One unified Recent Activity feed: benign events, routine incidents and
+ * collector heartbeats, newest first. Routine maintenance lives here rather
+ * than beside the criticals.
+ */
+function buildActivity(events, now, { sites = [], routineIncidents = [] } = {}) {
+  const entries = [];
+
+  for (const e of events.slice(0, 40)) {
+    const routine = BENIGN_TYPES.has(e.type);
+    entries.push({
+      at: e.timestamp,
+      text: activityText(e),
       time: timeAgo(e.timestamp, now),
-      tone: benign.has(e.type) ? "ok" : "dot",
-    }));
+      tone: routine ? "ok" : "dot",
+      kind: routine ? "routine" : "event",
+    });
+  }
+
+  // Heartbeats are not events; they are the collector proving it is alive.
+  for (const s of sites) {
+    if (!s.site?.lastSeenAt) continue;
+    entries.push({
+      at: s.site.lastSeenAt,
+      text: `Collector heartbeat received — ${s.site.name}`,
+      time: timeAgo(s.site.lastSeenAt, now),
+      tone: "ok",
+      kind: "routine",
+    });
+  }
+
+  const siteName = (id) => sites.find((s) => s.site.id === id)?.site.name ?? id;
+  for (const i of routineIncidents.slice(0, 10)) {
+    entries.push({
+      at: i.startedAt ?? i.endedAt ?? now,
+      text: `${i.title} — ${siteName(i.siteId)}`,
+      time: timeAgo(i.startedAt ?? now, now),
+      tone: "ok",
+      kind: "routine",
+    });
+  }
+
+  return entries.sort((a, b) => b.at - a.at).slice(0, 10);
 }
 
 /** Overview model for the redesigned dashboard. */
@@ -225,7 +287,7 @@ export async function getOverview() {
       critical: priorityIncidents.filter((i) => i.severity === "critical").length,
       suspiciousFiles: attentionFiles(files).length,
     },
-    recentActivity: buildActivity(events, now),
+    recentActivity: buildActivity(events, now, { sites, routineIncidents }),
     top,
     topSite: topSite?.site ?? null,
   };

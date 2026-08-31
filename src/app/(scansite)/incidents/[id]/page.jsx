@@ -9,6 +9,7 @@ import EvidenceList from "@/app/components/blackbox/EvidenceList";
 import RecommendedActions from "@/app/components/blackbox/RecommendedActions";
 import IncidentTimeline from "@/app/components/blackbox/IncidentTimeline";
 import DetectorFindings from "@/app/components/blackbox/DetectorFindings";
+import DevDiagnostics from "@/app/components/blackbox/DevDiagnostics";
 import IncidentStatusControl from "@/app/components/blackbox/IncidentStatusControl";
 import SuspiciousFileEvidence from "@/app/components/blackbox/files/SuspiciousFileEvidence";
 import { formatClock, formatDay } from "@/lib/blackbox/schemas";
@@ -65,6 +66,10 @@ export default async function IncidentDetailPage({ params }) {
       <RecommendedActions incident={incident} />
       <IncidentTimeline incident={incident} />
       <DetectorFindings incident={incident} />
+
+      {/* Diagnostics are for development only: they expose the internal
+          grouping, scoring and detector numbers behind the verdict. */}
+      {process.env.NODE_ENV === "development" ? <DevDiagnostics incident={incident} /> : null}
 
       <p className="pb-4 text-xs text-slate-400">
         Analysis is deterministic — produced by ScanSite&apos;s detectors, not an

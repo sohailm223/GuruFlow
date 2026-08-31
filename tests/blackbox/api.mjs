@@ -355,6 +355,68 @@ check('Collector limiter blocks the 301st request', hit(rlKey, 300, 60_000) === 
 const afterMany = await call('POST', '/api/blackbox/heartbeat', { siteId, pluginVersion: '0.2.0' }, H2);
 check('Collector endpoints still work under the limit', afterMany.status === 200, `got ${afterMany.status}`);
 
+/* ------------------------------------------------- terminology (item 6) */
+console.log('\nTerminology — no verdict the evidence cannot support');
+
+const termSite = await call('POST', '/api/blackbox/sites', { name: 'Terminology Suite', url: 'https://terminology-suite.example.com' });
+const termId = termSite.body?.site?.id;
+const termConn = await call('POST', '/api/blackbox/connect', { code: termSite.body?.connection?.code, siteUrl: 'https://terminology-suite.example.com' });
+const termKey = termConn.body?.collectorKey;
+const HT = (body) => signed(termId, termKey, body);
+
+const nowMs = Date.now();
+await call('POST', '/api/blackbox/ingest', {
+  site: termId,
+  events: [
+    { eventId: `term_${unique()}`, type: 'administrator_created', category: 'user', timestamp: new Date(nowMs - 8 * MINUTE).toISOString(), actor: { username: 'mallory', ip: '198.51.100.12' }, target: { username: 'mallory' }, changes: { to: 'administrator' } },
+    { eventId: `term_${unique()}`, type: 'executable_created', category: 'file', timestamp: new Date(nowMs - 2 * MINUTE).toISOString(), actor: { username: 'mallory', ip: '198.51.100.12' }, path: '/wp-content/uploads/cache/z.php', target: { name: 'z.php', path: '/wp-content/uploads/cache/z.php' }, metadata: { extension: '.php', executable: true } },
+  ],
+}, HT);
+
+const termIncs = await call('GET', `/api/blackbox/incidents?site=${termId}`);
+const termInc = termIncs.body?.incidents?.[0];
+const termText = JSON.stringify(termInc ?? {});
+check('Detector titles are evidence-based', termInc?.title === 'Suspicious executable after privilege escalation', termInc?.title);
+check('No "backdoor planted" / "webshell detected" / "malware confirmed"', !/backdoor planted|webshell detected|malware confirmed|confirmed malware/i.test(termText));
+check('Cause hedges to a possible compromise', /possible compromise, not a confirmed one/i.test(termInc?.cause ?? ''), termInc?.cause);
+
+/* ------------------------------------------------ file integrity records */
+console.log('\nFile integrity records');
+
+const relPath = 'wp-content/themes/twentytwentyfour/functions.php';
+const fileEv = (id, sha256, integrityStatus) => ({
+  eventId: id,
+  type: 'file_modified',
+  category: 'file',
+  timestamp: new Date().toISOString(),
+  path: '/' + relPath,
+  metadata: {
+    file: {
+      relativePath: relPath, filename: 'functions.php', extension: 'php', category: 'theme',
+      sha256, size: 1234, integrityStatus, riskScore: 55, confidence: 60,
+      firstSeenAt: nowMs, lastSeenAt: nowMs, modifiedAt: nowMs,
+    },
+  },
+});
+const hashA = crypto.createHash('sha256').update('clean-v1').digest('hex');
+const hashB = crypto.createHash('sha256').update('tampered-v2').digest('hex');
+
+await call('POST', '/api/blackbox/ingest', { site: termId, events: [fileEv(`fi_${unique()}`, hashA, 'new')] }, HT);
+let fiList = await call('GET', `/api/blackbox/sites/${termId}/files`);
+let rec = (fiList.body?.files ?? []).find((f) => f.relativePath === relPath);
+check('First sighting stored with its hash', rec?.sha256 === hashA && rec?.integrityStatus === 'new', `${rec?.integrityStatus}`);
+check('File record keeps size and first/last seen', rec?.size === 1234 && Number.isFinite(rec?.firstSeenAt) && Number.isFinite(rec?.lastSeenAt));
+
+await call('POST', '/api/blackbox/ingest', { site: termId, events: [fileEv(`fi_${unique()}`, hashB, 'modified')] }, HT);
+fiList = await call('GET', `/api/blackbox/sites/${termId}/files`);
+rec = (fiList.body?.files ?? []).find((f) => f.relativePath === relPath);
+check('Hash change is recorded as the previous hash', rec?.previousSha256 === hashA, rec?.previousSha256?.slice(0, 12));
+check('File history gains an entry on change', (rec?.history ?? []).length >= 1 && rec.history.at(-1).sha256 === hashB, JSON.stringify(rec?.history));
+check('Status follows the collector report', rec?.integrityStatus === 'modified', rec?.integrityStatus);
+check('File detail is retrievable by id', (await call('GET', `/api/blackbox/sites/${termId}/files/${rec.id}`)).status === 200);
+
+await call('DELETE', `/api/blackbox/sites/${termId}?purge=true`);
+
 /* ------------------------------------------------------- cleanup */
 // Remove the throwaway site, otherwise every run leaves another
 // "API Suite" entry cluttering the dashboard.

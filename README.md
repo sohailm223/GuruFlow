@@ -284,13 +284,19 @@ npm run lint    # eslint over the live source
 
 ```bash
 node tests/wordpress-lab/lint.mjs     # real PHP 8.0–8.4 syntax check of the collector (php-wasm)
-node tests/blackbox/api.mjs           # API contract + hardening suite
-node tests/blackbox/scenarios.mjs     # detector/grouping calibration
+node tests/blackbox/api.mjs           # API contract, hardening, lifecycle, trusted files, file integrity, terminology
+node tests/blackbox/scenarios.mjs     # detector + grouping/correlation calibration
+node tests/blackbox/dashboard.mjs     # overview priority, website table, event explorer filters, dev diagnostics
 ```
 
-The two `tests/blackbox` suites need a running server on `127.0.0.1:3000`
+The three `tests/blackbox` suites need a running server on `127.0.0.1:3000`
 (`SCANSITE_URL` overrides) and the admin credentials from the environment.
 They create and then delete their own sites.
+
+`dashboard.mjs` expects a **development** server, because it asserts the
+diagnostics panel is present; to confirm the panel is absent from a production
+build, run `npm run build && npx next start -p 3100` and load the same incident
+page there.
 
 Two probes are opt-in because they are disruptive by design:
 

@@ -15,7 +15,9 @@ const DATE_PRESETS = [
   { id: "30d", label: "Last 30 days", ms: 30 * 24 * 3_600_000 },
 ];
 
-const EMPTY_FILTERS = { category: "", type: "", actor: "", q: "", incident: "", date: "all" };
+const EMPTY_FILTERS = { category: "", type: "", actor: "", q: "", incident: "", date: "all", risk: "" };
+
+const RISK_BANDS = ["critical", "high", "medium", "low", "info"];
 
 /**
  * Raw Event Explorer.
@@ -24,7 +26,7 @@ const EMPTY_FILTERS = { category: "", type: "", actor: "", q: "", incident: "", 
  * scoring. Filters live in local state so the page needs no Suspense boundary,
  * and the feed polls rather than holding a socket open.
  */
-export default function EventExplorer({ siteId, siteName, host, health, initialFilters = {}, initialIncidents = [] }) {
+export default function EventExplorer({ siteId, siteName, host, health, initialFilters = {}, initialIncidents = [], sites = null, onSiteChange = null }) {
   const [events, setEvents] = useState([]);
   const [total, setTotal] = useState(0);
   const [stats, setStats] = useState({ eventsToday: 0, lastEventAt: null, totalAllTime: 0 });
@@ -50,12 +52,13 @@ export default function EventExplorer({ siteId, siteName, host, health, initialF
   const buildUrl = useCallback(
     (offset) => {
       const p = new URLSearchParams({
-        site: siteId,
         limit: String(PAGE_SIZE),
         offset: String(offset),
         correlation: "1",
       });
-      for (const key of ["category", "type", "actor", "q", "incident"]) {
+      // Empty siteId means "every website" (the global explorer).
+      if (siteId) p.set("site", siteId);
+      for (const key of ["category", "type", "actor", "q", "incident", "risk"]) {
         if (filters[key]) p.set(key, filters[key]);
       }
       if (dateFrom) p.set("from", String(dateFrom));
@@ -91,6 +94,7 @@ export default function EventExplorer({ siteId, siteName, host, health, initialF
   // first paint; this refresh keeps it current as new incidents are grouped.
   useEffect(() => {
     let cancelled = false;
+    if (!siteId) return;
     fetch(`/api/blackbox/incidents?site=${siteId}`, { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : { incidents: [] }))
       .then((d) => {
@@ -107,14 +111,14 @@ export default function EventExplorer({ siteId, siteName, host, health, initialF
     setLoading(true);
     load({ reset: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters.category, filters.type, filters.actor, filters.q, filters.incident, filters.date, siteId]);
+  }, [filters.category, filters.type, filters.actor, filters.q, filters.incident, filters.date, filters.risk, siteId]);
 
   // Light polling so new collector events appear without a manual refresh.
   useEffect(() => {
     const t = setInterval(() => load({ reset: true }), POLL_MS);
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters.category, filters.type, filters.actor, filters.q, filters.incident, filters.date, siteId]);
+  }, [filters.category, filters.type, filters.actor, filters.q, filters.incident, filters.date, filters.risk, siteId]);
 
   // Escape closes the open detail panel.
   useEffect(() => {
@@ -139,12 +143,16 @@ export default function EventExplorer({ siteId, siteName, host, health, initialF
   return (
     <div className="space-y-6">
       <header className="space-y-1">
-        <Link href={`/websites/${siteId}`} className="text-sm text-slate-500 hover:text-slate-800">
-          ← {siteName}
-        </Link>
+        {siteId ? (
+          <Link href={`/websites/${siteId}`} className="text-sm text-slate-500 hover:text-slate-800">
+            ← {siteName}
+          </Link>
+        ) : null}
         <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Raw Events</h1>
         <p className="max-w-2xl text-sm text-slate-500">
-          See exactly what the ScanSite Collector is receiving from {host}.
+          {siteId
+            ? `See exactly what the ScanSite Collector is receiving from ${host}.`
+            : "See exactly what the ScanSite Collectors are receiving, across every connected website."}
         </p>
       </header>
 
@@ -155,7 +163,15 @@ export default function EventExplorer({ siteId, siteName, host, health, initialF
         <Stat label="Matching filters" value={String(total)} hint={error ? error : lastUpdated ? `Updated ${lastUpdated.toLocaleTimeString()}` : undefined} tone={error ? "bad" : undefined} />
       </div>
 
-      <EventFilters filters={filters} setFilters={setFilters} facets={facets} incidents={incidents} />
+      <EventFilters
+        filters={filters}
+        setFilters={setFilters}
+        facets={facets}
+        incidents={incidents}
+        sites={sites}
+        siteId={siteId}
+        onSiteChange={onSiteChange}
+      />
 
       {filtersActive && (
         <div className="flex flex-wrap items-center gap-3 text-sm">
@@ -268,7 +284,7 @@ function Stat({ label, value, tone, hint }) {
   );
 }
 
-function EventFilters({ filters, setFilters, facets, incidents }) {
+function EventFilters({ filters, setFilters, facets, incidents, sites = null, siteId = "", onSiteChange = null }) {
   const set = (key) => (event) => setFilters((f) => ({ ...f, [key]: event.target.value }));
   return (
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -277,10 +293,27 @@ function EventFilters({ filters, setFilters, facets, incidents }) {
         <input
           value={filters.q}
           onChange={set("q")}
-          placeholder="plugin, username, path, IP, event ID"
+          placeholder="username, path, plugin, theme, IP, event ID, cron hook"
           className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-teal-600"
         />
       </label>
+      {sites && onSiteChange ? (
+        <label className="text-sm">
+          <span className="mb-1 block text-xs uppercase tracking-wide text-slate-500">Website</span>
+          <select
+            value={siteId}
+            onChange={(event) => onSiteChange(event.target.value)}
+            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-teal-600"
+          >
+            <option value="">All websites</option>
+            {sites.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
       <FilterSelect label="Category" value={filters.category} onChange={set("category")} options={facets.categories} />
       <FilterSelect label="Event type" value={filters.type} onChange={set("type")} options={facets.types} />
       <FilterSelect label="Actor" value={filters.actor} onChange={set("actor")} options={facets.actors} />
@@ -294,6 +327,21 @@ function EventFilters({ filters, setFilters, facets, incidents }) {
           {DATE_PRESETS.map((p) => (
             <option key={p.id} value={p.id}>
               {p.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="text-sm">
+        <span className="mb-1 block text-xs uppercase tracking-wide text-slate-500">Risk</span>
+        <select
+          value={filters.risk}
+          onChange={set("risk")}
+          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-teal-600"
+        >
+          <option value="">Any risk</option>
+          {RISK_BANDS.map((band) => (
+            <option key={band} value={band}>
+              {band.toUpperCase()}
             </option>
           ))}
         </select>

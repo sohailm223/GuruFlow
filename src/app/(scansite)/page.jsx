@@ -12,6 +12,7 @@ import {
   OctagonAlert,
   Copy,
   Pin,
+  CircleCheck,
 } from "lucide-react";
 import { getOverview } from "@/lib/blackbox/dashboard";
 import { getFiles } from "@/lib/blackbox/storage";
@@ -102,6 +103,23 @@ const HEALTH_TONE = {
   healthy: "text-emerald-400",
 };
 
+const HEALTH_LABEL = {
+  critical: "Critical",
+  attention: "Needs Attention",
+  healthy: "Healthy",
+};
+
+/** Collector Health is a separate question from Website Health: a healthy site
+ *  whose collector went quiet is blind, and a broken site with a live collector
+ *  is still reporting. */
+const COLLECTOR_TONE = {
+  connected: "text-emerald-400",
+  issue: "text-amber-400",
+  disconnected: "text-slate-400",
+  pending: "text-slate-500",
+  never: "text-slate-500",
+};
+
 function StatCard({ icon: Icon, label, value, sub, tone = "text-sky-400" }) {
   return (
     <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
@@ -143,9 +161,6 @@ export default async function OverviewPage() {
 
   const firstFinding = topFile?.codeFindings?.[0] ?? null;
 
-  // Routine maintenance is shown at the bottom of the page, never mixed in
-  // with the items that need attention.
-  const routine = (data.routineIncidents ?? []).slice(0, 6);
 
   return (
     <div className="space-y-6">
@@ -272,11 +287,11 @@ export default async function OverviewPage() {
                 <thead>
                   <tr className="text-[11px] uppercase tracking-wide text-slate-500">
                     <th className="pb-2 font-medium">Website</th>
-                    <th className="pb-2 font-medium">Health</th>
-                    <th className="pb-2 font-medium">Collector</th>
+                    <th className="pb-2 font-medium">Website Health</th>
+                    <th className="pb-2 font-medium">Collector Health</th>
                     <th className="pb-2 font-medium">File Integrity</th>
                     <th className="pb-2 font-medium">Risk</th>
-                    <th className="pb-2 font-medium">Incidents</th>
+                    <th className="pb-2 font-medium">Open Incidents</th>
                     <th className="pb-2 font-medium">Last Seen</th>
                   </tr>
                 </thead>
@@ -288,10 +303,34 @@ export default async function OverviewPage() {
                           {s.site.name}
                         </Link>
                       </td>
-                      <td className={`py-2.5 capitalize ${HEALTH_TONE[s.websiteHealth] ?? "text-slate-400"}`}>{s.websiteHealth}</td>
-                      <td className="py-2.5 capitalize text-slate-400">{s.collector.key}</td>
-                      <td className="py-2.5 text-slate-400">
-                        {s.fileStats.critical ? <span className="text-rose-400">{s.fileStats.critical} critical</span> : "Verified"}
+                      {/* Website Health — driven by open incidents on this site. */}
+                      <td className={`py-2.5 font-semibold ${HEALTH_TONE[s.websiteHealth] ?? "text-slate-400"}`}>
+                        {HEALTH_LABEL[s.websiteHealth] ?? s.websiteHealth}
+                      </td>
+                      {/* Collector Health — is the plugin reporting? */}
+                      <td className={`py-2.5 font-medium ${COLLECTOR_TONE[s.collector.key] ?? "text-slate-400"}`}>
+                        {s.collector.label}
+                        {s.collector.key === "issue" && s.collector.since ? (
+                          <span className="ml-1 font-normal text-slate-500">({timeAgo(s.collector.since, now)})</span>
+                        ) : null}
+                      </td>
+                      {/* File Integrity — counts, not a single yes/no. */}
+                      <td className="py-2.5">
+                        {s.fileStats.critical > 0 ? (
+                          <span className="font-semibold text-rose-400">
+                            {s.fileStats.critical} Critical
+                            {s.fileStats.suspicious > 0 ? (
+                              <span className="ml-1 font-normal text-orange-400">· {s.fileStats.suspicious} Suspicious</span>
+                            ) : null}
+                          </span>
+                        ) : s.fileStats.suspicious > 0 ? (
+                          <span className="font-semibold text-orange-400">{s.fileStats.suspicious} Suspicious</span>
+                        ) : (
+                          <span className="text-emerald-400">Verified</span>
+                        )}
+                        {s.fileStats.checked > 0 ? (
+                          <span className="ml-1 text-xs text-slate-500">({s.fileStats.checked.toLocaleString()} checked)</span>
+                        ) : null}
                       </td>
                       <td className={`py-2.5 font-semibold ${RISK_TONE(s.stats.risk)}`}>{s.stats.risk}/100</td>
                       <td className="py-2.5 text-slate-400">{s.stats.open}</td>
@@ -427,52 +466,37 @@ export default async function OverviewPage() {
         </div>
       </div>
 
-      {/* Recent Activity is the last thing on the page: routine maintenance and
-          benign events live here, deliberately separated from the criticals at
+      {/* Recent Activity is the last thing on the page. Routine maintenance —
+          successful updates, completed scans, collector heartbeats — lives here
+          as part of the same feed, deliberately separated from the criticals at
           the top so nothing important is diluted by noise. */}
       <Panel title="Recent Activity" action={<Link href="/events" className="text-xs text-teal-400 hover:underline">All events</Link>}>
-        <div className="grid gap-6 lg:grid-cols-2">
-          <div>
-            {data.recentActivity.length === 0 ? (
-              <p className="text-sm text-slate-500">No activity recorded yet.</p>
-            ) : (
-              <ul className="space-y-2">
-                {data.recentActivity.map((a, i) => (
-                  <li key={i} className="flex items-start gap-3 text-sm">
-                    <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${a.tone === "ok" ? "bg-emerald-500" : "bg-slate-500"}`} />
-                    <span className="text-slate-300">{a.text}</span>
-                    <span className="ml-auto shrink-0 text-xs text-slate-500">{a.time}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-
-          <div>
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-              Routine maintenance
-            </p>
-            {routine.length === 0 ? (
-              <p className="text-sm text-slate-500">No routine maintenance recorded.</p>
-            ) : (
-              <ul className="space-y-2">
-                {routine.map((r) => (
-                  <li key={r.id}>
-                    <Link href={`/incidents/${r.id}`} className="flex items-start gap-3 text-sm hover:text-teal-300">
-                      <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-sky-500" />
-                      <span className="text-slate-400">{r.title}</span>
-                      <span className="ml-auto shrink-0 text-xs text-slate-600">{timeAgo(r.startedAt, now)}</span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            )}
-            <p className="mt-3 text-xs leading-relaxed text-slate-600">
-              Routine updates and expected changes are informational. They are never mixed into the items that need
-              attention above.
-            </p>
-          </div>
-        </div>
+        {data.recentActivity.length === 0 ? (
+          <p className="text-sm text-slate-500">No activity recorded yet.</p>
+        ) : (
+          <ul className="space-y-2">
+            {data.recentActivity.map((a, i) => (
+              <li key={i} className="flex items-start gap-3 text-sm">
+                {a.tone === "ok" ? (
+                  <CircleCheck size={15} className="mt-0.5 shrink-0 text-emerald-400" />
+                ) : (
+                  <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-slate-500" />
+                )}
+                <span className={a.tone === "ok" ? "text-slate-300" : "text-slate-300"}>{a.text}</span>
+                {a.kind === "routine" && (
+                  <span className="mt-0.5 shrink-0 rounded bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-400">
+                    Routine
+                  </span>
+                )}
+                <span className="ml-auto shrink-0 text-xs text-slate-500">{a.time}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+        <p className="mt-4 border-t border-slate-800 pt-3 text-xs leading-relaxed text-slate-600">
+          Routine updates, completed scans and collector heartbeats are informational. They are never mixed into the
+          items that need attention above.
+        </p>
       </Panel>
     </div>
   );
