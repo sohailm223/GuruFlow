@@ -14,6 +14,8 @@ export const LAB = dirname(fileURLToPath(import.meta.url));
 export const REPO = join(LAB, '..', '..');
 export const SCANSITE = process.env.SCANSITE_URL || 'http://127.0.0.1:3000';
 export const WP_ENDPOINT = process.env.WP_ENDPOINT || SCANSITE;
+export const ADMIN_USER = process.env.SCANSITE_ADMIN_USER || 'admin';
+export const ADMIN_PASS = process.env.SCANSITE_ADMIN_PASSWORD || 'scansite-test-pass';
 
 /* ----------------------------------------------------------------- results */
 
@@ -103,10 +105,41 @@ export async function flush(php) {
 
 /* ------------------------------------------------------------ ScanSite API */
 
+/**
+ * Session cookie for the trusted dashboard routes.
+ *
+ * Every route the harness calls is behind the admin session gate, so the lab
+ * has to log in exactly like the blackbox suites do. Without this the whole
+ * matrix fails at the first request with a 401, which reads like "ScanSite is
+ * down" rather than "the harness never authenticated".
+ */
+let SESSION = '';
+
+/** Log in once; idempotent, and fails loudly with the real HTTP status. */
+export async function login() {
+  if (SESSION) return SESSION;
+  const r = await fetch(SCANSITE + '/api/blackbox/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: ADMIN_USER, password: ADMIN_PASS }),
+  });
+  if (r.status !== 200) {
+    throw new Error(`Admin login failed (HTTP ${r.status}) — set SCANSITE_ADMIN_USER / SCANSITE_ADMIN_PASSWORD to match the running server`);
+  }
+  const c = (r.headers.getSetCookie?.() ?? []).find((x) => x.startsWith('scansite_session='));
+  if (!c) throw new Error('Admin login returned no session cookie');
+  SESSION = c.split(';')[0];
+  return SESSION;
+}
+
 async function call(method, path, body, headers = {}) {
   const res = await fetch(SCANSITE + path, {
     method,
-    headers: { 'Content-Type': 'application/json', ...headers },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(SESSION ? { Cookie: SESSION } : {}),
+      ...headers,
+    },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const text = await res.text();
@@ -154,6 +187,13 @@ export async function pruneLabSites(name = 'ScanSite WP Lab') {
 
 /** Fail loudly if ScanSite is not running — every test depends on it. */
 export async function requireScanSite() {
+  // Authenticate first: without a session every trusted route answers 401, and
+  // the message below would blame the server for the harness's own omission.
+  try {
+    await login();
+  } catch (e) {
+    throw new Error(`Cannot authenticate against ScanSite at ${SCANSITE} (${e.message})`);
+  }
   try {
     const r = await api.health();
     if (r.status !== 200) throw new Error(`HTTP ${r.status}`);

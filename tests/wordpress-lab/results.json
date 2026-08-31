@@ -17,7 +17,7 @@
     {
       "name": "Pairing code accepted by ScanSite",
       "pass": true,
-      "detail": "siteId=site_08a342"
+      "detail": "siteId=site_3bd2a5"
     },
     {
       "name": "Collector key stored in WordPress",
@@ -47,12 +47,12 @@
     {
       "name": "Connection screen renders",
       "pass": true,
-      "detail": "8394 bytes of HTML"
+      "detail": "8390 bytes of HTML"
     },
     {
       "name": "Heartbeat reaches ScanSite",
       "pass": true,
-      "detail": "lastSeenAt 1787915141220 -> 1787915141978"
+      "detail": "lastSeenAt 1788177969918 -> 1788177970726"
     },
     {
       "name": "Heartbeat reports real versions",
@@ -165,7 +165,7 @@
       "detected": "Yes",
       "payloadCorrect": "Yes",
       "duplicates": "No",
-      "notes": "username=test_admin role=administrator userId=28"
+      "notes": "username=test_admin role=administrator userId=8"
     },
     {
       "event": "logout",
@@ -213,7 +213,7 @@
       "detected": "Yes",
       "payloadCorrect": "Yes",
       "duplicates": "No",
-      "notes": "hook=lab_test_hook schedule=hourly nextRun=2026-08-28T12:05:50+00:00"
+      "notes": "hook=lab_test_hook schedule=hourly nextRun=2026-08-31T13:06:19+00:00"
     },
     {
       "event": "cron_removed",
@@ -229,7 +229,7 @@
       "detected": "Yes",
       "payloadCorrect": "Yes",
       "duplicates": "No",
-      "notes": "path=/.htaccess sha256=79982f1381a5… contents sent=no"
+      "notes": "path=/.htaccess sha256=6891c17522e2… contents sent=no"
     },
     {
       "event": "wp_config_modified",
@@ -237,7 +237,7 @@
       "detected": "Yes",
       "payloadCorrect": "Yes",
       "duplicates": "No",
-      "notes": "sha256=a31ace28164b… secrets sent=no"
+      "notes": "sha256=94edd93194b8… secrets sent=no"
     },
     {
       "event": "executable_created",
@@ -362,7 +362,7 @@
     {
       "name": "Status header exposes the required fields",
       "pass": true,
-      "detail": "collector=0.2.0 wp=6.8.3 php=8.3.32 signing=off"
+      "detail": "collector=0.2.0 wp=6.8.3 php=8.3.32 signing=enabled"
     },
     {
       "name": "Send Test Event works through the real pipeline",
@@ -452,12 +452,12 @@
     {
       "name": "Event capture is local and fast (no network)",
       "pass": true,
-      "detail": "3 ms to enqueue"
+      "detail": "2 ms to enqueue"
     },
     {
       "name": "admin_init file hashing stays cheap",
       "pass": true,
-      "detail": "96 ms"
+      "detail": "94 ms"
     },
     {
       "name": "No secret-like keys or values in real payloads",
@@ -482,12 +482,12 @@
     {
       "name": "Timestamps are ISO 8601 UTC",
       "pass": true,
-      "detail": "2026-08-28T11:07:11+00:00"
+      "detail": "2026-08-31T12:07:41+00:00"
     },
     {
       "name": "Server stores UTC (offset +00:00)",
       "pass": true,
-      "detail": "2026-08-28T11:07:11+00:00"
+      "detail": "2026-08-31T12:07:41+00:00"
     },
     {
       "name": "eventId is unique",
@@ -507,7 +507,7 @@
     {
       "name": "Every collector event type is accepted by ScanSite",
       "pass": true,
-      "detail": "32/32 accepted"
+      "detail": "38/38 accepted"
     },
     {
       "name": "Scenario: plugin event delivered",
@@ -542,7 +542,7 @@
     {
       "name": "Scenario events grouped into an incident",
       "pass": true,
-      "detail": "Backdoor planted after privilege escalation"
+      "detail": "Suspicious executable after privilege escalation"
     },
     {
       "name": "Incident evidence references real event IDs",
@@ -569,11 +569,11 @@
   "performance": [
     {
       "name": "wp_insert_user with collector active",
-      "ms": 136
+      "ms": 137
     },
     {
       "name": "admin_init (config + uploads hashing)",
-      "ms": 96
+      "ms": 94
     },
     {
       "name": "update_option with collector active",
@@ -581,7 +581,7 @@
     },
     {
       "name": "enqueue one event (no network)",
-      "ms": 3
+      "ms": 2
     }
   ],
   "bugs": [],
@@ -598,6 +598,8 @@
       "executable_created",
       "file_created",
       "file_deleted",
+      "file_integrity_scan_completed",
+      "file_integrity_scan_failed",
       "file_modified",
       "htaccess_modified",
       "login_failed",
@@ -611,13 +613,17 @@
       "plugin_installed",
       "plugin_updated",
       "registration_setting_changed",
+      "site_inventory",
+      "suspicious_code_detected",
       "theme_activated",
       "theme_deleted",
       "theme_installed",
       "theme_updated",
+      "unexpected_executable",
       "user_created",
       "user_deleted",
       "user_role_changed",
+      "users_snapshot",
       "wordpress_updated",
       "wp_config_modified"
     ],
@@ -632,6 +638,8 @@
       "executable_created",
       "file_created",
       "file_deleted",
+      "file_integrity_scan_completed",
+      "file_integrity_scan_failed",
       "file_modified",
       "htaccess_modified",
       "login_failed",
@@ -645,24 +653,28 @@
       "plugin_installed",
       "plugin_updated",
       "registration_setting_changed",
+      "site_inventory",
+      "suspicious_code_detected",
       "theme_activated",
       "theme_deleted",
       "theme_installed",
       "theme_updated",
+      "unexpected_executable",
       "user_created",
       "user_deleted",
       "user_role_changed",
+      "users_snapshot",
       "wordpress_updated",
       "wp_config_modified"
     ],
     "rejected": []
   },
   "scenarioIncident": {
-    "title": "Backdoor planted after privilege escalation",
+    "title": "Suspicious executable after privilege escalation",
     "severity": "critical",
     "riskScore": 100,
-    "rawScore": 1651,
-    "confidence": 70,
+    "rawScore": 1675,
+    "confidence": 86,
     "detectors": [
       "priv-esc-then-backdoor",
       "persistence"

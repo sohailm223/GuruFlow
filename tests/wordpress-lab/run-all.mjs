@@ -42,4 +42,12 @@ await runCollectorTests(php, siteId);
 await runScenario(php, siteId);
 summary();
 saveResults('results.json');
+
+// Clean up after the run as well as before it. The dashboard's Recent Activity
+// feed is global, so lab events left in the store push other suites' seeded
+// events out of the window and make dashboard.mjs fail on assertions that have
+// nothing to do with the collector.
+const cleaned = await pruneLabSites();
+if (cleaned) console.log(`\nRemoved ${cleaned} lab website(s) created by this run.`);
+
 process.exit(0);

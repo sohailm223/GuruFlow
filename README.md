@@ -364,6 +364,34 @@ fix panel and the verification panel — survive a production build in both of
 their states, and that developer diagnostics appear on the dev server and not
 on the production one.
 
+#### The real-WordPress lab
+
+`lint.mjs` only proves the collector parses. `tests/wordpress-lab` runs the real
+plugin inside a real WordPress on real PHP and watches what it actually delivers:
+
+```bash
+cd tests/wordpress-lab
+npm install                 # @php-wasm/node
+node setup.mjs              # downloads WordPress 6.8.3 + the SQLite drop-in, copies the plugin
+node run-all.mjs            # needs the ScanSite dev server on 127.0.0.1:3000
+```
+
+`setup.mjs` is idempotent and re-copies `wordpress-plugin/` on every run, so the
+lab always tests current source. `wp/`, `wp-sqlite/` and `node_modules/` are
+gitignored — they are large and reproducible.
+
+It covers connection and pairing, 27 real event types through a live
+`wp_insert_user` / `wp_schedule_event` / file write, queue and retry behaviour,
+the admin screen, secret-leak scanning of real payloads, and a final benign
+multi-event scenario that must land as one incident with evidence pointing at
+real event IDs. Current result: 27/27 event types validated, 0 bugs.
+
+It authenticates with `SCANSITE_ADMIN_USER` / `SCANSITE_ADMIN_PASSWORD` and
+removes the lab website both before and after the run — the dashboard's Recent
+Activity feed is global, so a lab site left behind pushes other suites' seeded
+events out of the window and makes `dashboard.mjs` fail for reasons that have
+nothing to do with the collector.
+
 Two probes are opt-in because they are disruptive by design:
 
 ```bash

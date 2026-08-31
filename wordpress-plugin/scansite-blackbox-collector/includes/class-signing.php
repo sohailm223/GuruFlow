@@ -58,4 +58,18 @@ class ScanSite_BB_Signing {
 		}
 		return bin2hex( random_bytes( 16 ) );
 	}
+
+	/**
+	 * Whether requests are HMAC-signed.
+	 *
+	 * Always true: signing is mandatory, not opt-in, and there is no setting
+	 * that turns it off. The method exists so the diagnostics panel asks this
+	 * class instead of hard-coding a value that could drift away from how
+	 * headers() actually behaves.
+	 *
+	 * @return bool
+	 */
+	public static function signing_enabled() {
+		return true;
+	}
 }
