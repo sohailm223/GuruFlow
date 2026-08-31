@@ -1,9 +1,9 @@
 {
-  "eventId": "evt_e0f7bb18f194203f",
+  "eventId": "evt_788f4d734816e176",
   "siteId": "site_example000000",
   "category": "plugin",
   "type": "plugin_activated",
-  "timestamp": 1788200782000,
+  "timestamp": 1788201686000,
   "severityHint": null,
   "actor": {
     "userId": 1,
@@ -16,11 +16,11 @@
     "name": "Lab Test Plugin"
   },
   "metadata": [],
-  "receivedAt": 1788200782827,
+  "receivedAt": 1788201687091,
   "riskScore": 10,
   "riskBand": "info",
   "incident": {
-    "id": "inc_8c49ce671011",
+    "id": "inc_8d2219d6d68b",
     "title": "Suspicious executable after privilege escalation",
     "severity": "critical",
     "riskScore": 100,

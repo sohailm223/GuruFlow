@@ -1,9 +1,9 @@
 {
-  "eventId": "evt_ea39747d5f4259d8",
+  "eventId": "evt_898f46afc0022f9e",
   "siteId": "site_example000000",
   "category": "user",
   "type": "administrator_created",
-  "timestamp": 1788200782000,
+  "timestamp": 1788201687000,
   "severityHint": null,
   "actor": {
     "userId": 1,
@@ -13,18 +13,18 @@
   },
   "target": {
     "username": "example_user",
-    "userId": 31,
+    "userId": 36,
     "role": "administrator"
   },
   "changes": {
     "to": "administrator"
   },
   "metadata": [],
-  "receivedAt": 1788200782827,
+  "receivedAt": 1788201687091,
   "riskScore": 37,
   "riskBand": "low",
   "incident": {
-    "id": "inc_8c49ce671011",
+    "id": "inc_8d2219d6d68b",
     "title": "Suspicious executable after privilege escalation",
     "severity": "critical",
     "riskScore": 100,
