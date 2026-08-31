@@ -340,11 +340,12 @@ node tests/blackbox/api.mjs           # API contract, hardening, lifecycle, trus
 node tests/blackbox/scenarios.mjs     # detector + grouping/correlation calibration
 node tests/blackbox/dashboard.mjs     # overview priority, website table, event explorer filters, dev diagnostics
 node tests/blackbox/remediation.mjs   # likely entry point, guided fix plan, verification round trip
+node tests/blackbox/production-render.mjs   # dev vs production render of the incident page (two servers)
 ```
 
-The four `tests/blackbox` suites need a running server on `127.0.0.1:3000`
-(`SCANSITE_URL` overrides) and the admin credentials from the environment.
-They create and then delete their own sites.
+Four of the five `tests/blackbox` suites need a running server on
+`127.0.0.1:3000` (`SCANSITE_URL` overrides) and the admin credentials from the
+environment. They create and then delete their own sites.
 
 `remediation.mjs` is the only suite with a unit half: it imports
 `classifyEntryPoint` and the remediation helpers straight from `src/lib/blackbox`,
@@ -353,9 +354,15 @@ skipped. Its live half starts a throwaway HTTP origin so the website-availabilit
 check has a real HTTP 200 to find.
 
 `dashboard.mjs` expects a **development** server, because it asserts the
-diagnostics panel is present; to confirm the panel is absent from a production
-build, run `npm run build && npx next start -p 3100` and load the same incident
-page there.
+diagnostics panel is present.
+
+`production-render.mjs` is the exception: it needs the dev server on `:3000`
+**and** a production server on `:3100` (`npm run build`, then
+`npx next start -H 127.0.0.1 -p 3100`) sharing one data directory. It renders
+the same incident on both and asserts that the client components — the guided
+fix panel and the verification panel — survive a production build in both of
+their states, and that developer diagnostics appear on the dev server and not
+on the production one.
 
 Two probes are opt-in because they are disruptive by design:
 
