@@ -50,7 +50,7 @@ export function extractTargets(incident) {
   const themes = new Set();
   const config = [];
 
-  const evidence = { account: {}, file: {}, cron: {}, config: {} };
+  const evidence = { account: {}, file: {}, cron: {}, config: {}, plugin: {}, theme: {}, applicationPassword: null };
 
   const suspiciousExecutable = events.find(
     (e) => ["executable_created", "unexpected_executable"].includes(e.type) && /\.php$/i.test(strip(e.path ?? e.target?.path ?? ""))
@@ -109,8 +109,33 @@ export function extractTargets(incident) {
       }
     }
 
-    if (e.target?.plugin) plugins.add(e.target.plugin);
-    if (e.target?.theme) themes.add(e.target.theme);
+    if (e.target?.plugin) {
+      plugins.add(e.target.plugin);
+      if (!evidence.plugin[e.target.plugin]) {
+        evidence.plugin[e.target.plugin] = {
+          eventId: e.eventId ?? null,
+          at: e.timestamp,
+          reason: `${words(e.type)} recorded for the plugin ${e.target.plugin}${e.changes?.from ? ` (from version ${e.changes.from})` : ""}`,
+        };
+      }
+    }
+    if (e.target?.theme) {
+      themes.add(e.target.theme);
+      if (!evidence.theme[e.target.theme]) {
+        evidence.theme[e.target.theme] = {
+          eventId: e.eventId ?? null,
+          at: e.timestamp,
+          reason: `${words(e.type)} recorded for the theme ${e.target.theme}${e.changes?.from ? ` (from version ${e.changes.from})` : ""}`,
+        };
+      }
+    }
+    if ((e.type === "application_password_created" || e.type === "application_password_deleted") && !evidence.applicationPassword) {
+      evidence.applicationPassword = {
+        eventId: e.eventId ?? null,
+        at: e.timestamp,
+        reason: `${words(e.type)}${e.target?.name ? ` for "${e.target.name}"` : ""}${e.actor?.username ? ` by ${e.actor.username}` : ""}`,
+      };
+    }
 
     if (CONFIG_EVENTS.includes(e.type) && !config.includes(e.type)) {
       config.push(e.type);
@@ -246,7 +271,9 @@ export function buildRemediationPlan(incident) {
       item("verify-core", "Verify WordPress core files"),
       item("verify-plugins", "Verify plugin files"),
       item("verify-themes", "Verify theme files"),
-      ...(t.plugins.length ? [item("reinstall-plugin", `Reinstall ${t.plugins.join(", ")} from a trusted source`)] : []),
+      ...(t.plugins.length
+        ? [item("reinstall-plugin", `Reinstall ${t.plugins.join(", ")} from a trusted source`, null, t.evidence?.plugin?.[t.plugins[0]] ?? null)]
+        : []),
       item("rescan", "Re-run the File Integrity Scan"),
     ],
   });
@@ -333,23 +360,28 @@ export function buildPrevention(incident, targets = extractTargets(incident)) {
   const t = targets;
   const out = [];
   const accountEv = t.evidence?.account?.[t.accounts?.[0]] ?? null;
-  const pluginEv = t.evidence?.config?.[t.config?.[0]] ?? null;
+  // Component advice cites component evidence, configuration advice cites
+  // configuration evidence. These were previously conflated, which attached a
+  // config event to the "update your plugins" recommendation.
+  const componentEv = t.evidence?.plugin?.[t.plugins?.[0]] ?? t.evidence?.theme?.[t.themes?.[0]] ?? null;
+  const configEv = t.evidence?.config?.[t.config?.[0]] ?? null;
+  const appPasswordEv = t.evidence?.applicationPassword ?? null;
 
   if (t.accounts.length || incident.entryPoint?.target?.kind === "account") {
     out.push({ level: "HIGH", text: "Enable two-factor authentication for administrators", evidence: accountEv });
     out.push({ level: "HIGH", text: "Remove unused administrator accounts", evidence: accountEv });
   }
   if (t.plugins.length || t.themes.length) {
-    out.push({ level: "HIGH", text: "Update outdated plugins and themes, and remove the ones you do not use", evidence: pluginEv });
+    out.push({ level: "HIGH", text: "Update outdated plugins and themes, and remove the ones you do not use", evidence: componentEv });
   }
   if (t.files.some((f) => f.includes("uploads/"))) {
     out.push({ level: "MEDIUM", text: "Disable PHP execution inside the uploads directory", evidence: t.evidence?.file?.[t.files[0]] ?? null });
   }
   if (t.applicationPasswords) {
-    out.push({ level: "MEDIUM", text: "Review application passwords and remove any you do not recognise", evidence: null });
+    out.push({ level: "MEDIUM", text: "Review application passwords and remove any you do not recognise", evidence: appPasswordEv });
   }
   if (t.config.length) {
-    out.push({ level: "MEDIUM", text: "Make wp-config.php and .htaccess read-only for the web server user", evidence: pluginEv });
+    out.push({ level: "MEDIUM", text: "Make wp-config.php and .htaccess read-only for the web server user", evidence: configEv });
   }
   out.push({ level: "MEDIUM", text: "Keep a known-good backup and test restoring it", evidence: null });
   out.push({ level: "LOW", text: "Shorten inactive session lifetime for administrators", evidence: accountEv });

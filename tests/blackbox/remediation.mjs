@@ -264,6 +264,41 @@ const prevention = buildPrevention(planIncident);
 check('Prevention suggests 2FA when an account is involved', prevention.some((p) => /two-factor/i.test(p.text)));
 check('Prevention items carry HIGH/MEDIUM/LOW levels', prevention.every((p) => ['HIGH', 'MEDIUM', 'LOW'].includes(p.level)));
 check('Prevention items cite evidence where the incident supplies it', prevention.some((p) => p.evidence?.eventId));
+
+/* --------------------------- evidence must match the advice it is attached to */
+console.log('\nEvidence attribution (unit)');
+
+// A plugin event, a config event and an application-password event, each with a
+// distinct id, so a recommendation citing the wrong one is visible.
+const attributionEvents = [
+  { eventId: 'att_plugin', timestamp: at(0), type: 'plugin_updated', category: 'plugin', target: { plugin: 'woocommerce' }, changes: { from: '8.1.0' } },
+  { eventId: 'att_theme', timestamp: at(1), type: 'theme_updated', category: 'theme', target: { theme: 'astra' } },
+  { eventId: 'att_config', timestamp: at(2), type: 'siteurl_changed', category: 'config', changes: { to: 'https://evil.example' } },
+  { eventId: 'att_apppw', timestamp: at(3), type: 'application_password_created', category: 'user', target: { name: 'CI Bot' }, actor: { username: 'editor1' } },
+  { eventId: 'att_acct', timestamp: at(4), type: 'administrator_created', category: 'user', target: { username: 'mallory' } },
+  { eventId: 'att_file', timestamp: at(10), type: 'executable_created', category: 'file', path: '/wp-content/uploads/cache/z.php' },
+];
+const attributionIncident = { startedAt: at(0), events: attributionEvents, entryPoint: null };
+const attributed = buildPrevention(attributionIncident);
+const citeFor = (needle) => attributed.find((p) => p.text.includes(needle))?.evidence?.eventId ?? null;
+
+check('Plugin advice cites the plugin event, not a config event', citeFor('Update outdated plugins') === 'att_plugin', citeFor('Update outdated plugins'));
+check('Configuration advice cites the configuration event', citeFor('read-only for the web server') === 'att_config', citeFor('read-only for the web server'));
+check('Application-password advice cites the application-password event', citeFor('Review application passwords') === 'att_apppw', citeFor('Review application passwords'));
+check('Administrator advice cites the account event', citeFor('two-factor') === 'att_acct', citeFor('two-factor'));
+check('Uploads advice cites the file event', citeFor('uploads directory') === 'att_file', citeFor('uploads directory'));
+check('Every cited event exists in the incident',
+  attributed.filter((p) => p.evidence?.eventId).every((p) => attributionEvents.some((e) => e.eventId === p.evidence.eventId)),
+  JSON.stringify(attributed.map((p) => p.evidence?.eventId)));
+check('Generic advice that no event caused cites nothing',
+  attributed.filter((p) => /backup|session lifetime/i.test(p.text)).every((p) => p.evidence?.eventId == null || p.evidence.eventId === 'att_acct'));
+
+const attributionPlan = buildRemediationPlan(attributionIncident);
+const reinstall = attributionPlan.priorities.find((p) => p.id === 'integrity')?.items.find((i) => i.id === 'reinstall-plugin');
+check('The reinstall step cites the plugin it names', reinstall?.evidence?.eventId === 'att_plugin', reinstall?.evidence?.eventId);
+check('Every evidence-citing checklist line points at a real event',
+  attributionPlan.priorities.flatMap((p) => p.items).filter((i) => i.evidence?.eventId)
+    .every((i) => attributionEvents.some((e) => e.eventId === i.evidence.eventId)));
 check('Uploads hardening only appears when an uploads file is involved',
   prevention.some((p) => /uploads/i.test(p.text)) && buildPrevention({ events: [], entryPoint: null }).every((p) => !/uploads/i.test(p.text)));
 
