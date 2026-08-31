@@ -452,6 +452,7 @@ function snapshotAfter(events, at) {
  */
 export function evaluateVerification(incident, { events = [], files = [], siteStatus = null, now = Date.now() } = {}) {
   const targets = extractTargets(incident);
+  const howById = new Map(buildVerificationTargets(incident, targets).map((c) => [c.id, c.how]));
   const refs = referenceTimes(incident);
   const after = (at) => events.filter((e) => at === undefined || e.timestamp > at);
   const results = [];
@@ -555,6 +556,10 @@ export function evaluateVerification(incident, { events = [], files = [], siteSt
       evidence: null,
     });
   }
+
+  // Every result explains the rule that decided it, so the panel can show
+  // its method instead of asking the reader to trust the verdict.
+  for (const r of results) r.how = howById.get(r.id) ?? null;
 
   const count = (state) => results.filter((r) => r.state === state).length;
   const verified = count("verified_resolved");

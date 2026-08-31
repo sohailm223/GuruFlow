@@ -112,6 +112,11 @@ export default function VerifyRepair({ incidentId, initial, initialStatus }) {
                   <span className="text-sm text-slate-800">{r.label}</span>
                   <span className="ml-2 break-all font-mono text-xs text-slate-500">{r.value}</span>
                   <span className="block text-xs text-slate-500">{r.detail}</span>
+                  {r.how ? (
+                    <span className="mt-0.5 block text-[11px] text-slate-400">
+                      <span className="font-medium text-slate-500">How this is decided:</span> {r.how}
+                    </span>
+                  ) : null}
                   {r.strength === "weak" ? (
                     <span className="mt-0.5 block text-[11px] uppercase tracking-wide text-amber-700">Weak evidence</span>
                   ) : null}

@@ -24,6 +24,7 @@ import { classifyEntryPoint, ENTRY_POINT_TYPES } from '../../src/lib/blackbox/en
 import {
   buildRemediationPlan,
   buildPrevention,
+  buildVerificationTargets,
   evaluateVerification,
   verificationStaleness,
   remediationStatusFrom,
@@ -357,6 +358,27 @@ check('A deletion that predates the file does not count as a fix',
     { events: [{ eventId: 'g9', timestamp: at(1), type: 'file_deleted', category: 'file', path: '/wp-content/uploads/cache/z.php' }], siteStatus: null }
   ).results.find((r) => r.kind === 'file').state === 'not_verified');
 check('Each result names the evidence it used', fixed.results.every((r) => typeof r.detail === 'string' && r.detail.length > 5));
+
+/* ------------------------------------------- one source of truth for checks */
+console.log('\nVerification check list (unit)');
+
+const configIncident = { ...planIncident, events: [...planIncident.events, { eventId: 'cfg1', timestamp: at(2), type: 'siteurl_changed', category: 'config', changes: { to: 'https://evil.example' } }] };
+const declared = buildVerificationTargets(configIncident);
+const evaluated = evaluateVerification(configIncident, { events: [], files: [], siteStatus: { ok: true, status: 200 } });
+
+check('Every declared check is actually evaluated',
+  declared.every((c) => evaluated.results.some((r) => r.id === c.id)),
+  declared.filter((c) => !evaluated.results.some((r) => r.id === c.id)).map((c) => c.id).join(','));
+check('No evaluated check is missing from the declared list',
+  evaluated.results.every((r) => declared.some((c) => c.id === r.id)),
+  evaluated.results.filter((r) => !declared.some((c) => c.id === r.id)).map((r) => r.id).join(','));
+check('The declared list has no duplicate ids', new Set(declared.map((c) => c.id)).size === declared.length);
+check('Every result explains the rule that decided it',
+  evaluated.results.every((r) => typeof r.how === 'string' && r.how.length > 15),
+  JSON.stringify(evaluated.results.filter((r) => !r.how).map((r) => r.id)));
+check('The DNS check says plainly that it is not monitored',
+  evaluated.results.find((r) => r.kind === 'dns')?.how.includes('does not monitor DNS'),
+  evaluated.results.find((r) => r.kind === 'dns')?.how);
 
 /* ------------------------------------------------- remediation status */
 console.log('\nRemediation status (unit)');
