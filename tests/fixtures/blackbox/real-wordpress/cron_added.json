@@ -1,9 +1,9 @@
 {
-  "eventId": "evt_291be907d516c404",
+  "eventId": "evt_88bdd15eaa50dcf8",
   "siteId": "site_example000000",
   "category": "cron",
   "type": "cron_added",
-  "timestamp": 1788199258000,
+  "timestamp": 1788200782000,
   "severityHint": null,
   "actor": {
     "userId": 1,
@@ -17,15 +17,15 @@
   },
   "metadata": {
     "schedule": "hourly",
-    "nextRun": "2026-08-31T19:00:58+00:00",
+    "nextRun": "2026-08-31T19:26:22+00:00",
     "argCount": 0,
     "argsHash": null
   },
-  "receivedAt": 1788199258098,
+  "receivedAt": 1788200782828,
   "riskScore": 14,
   "riskBand": "info",
   "incident": {
-    "id": "inc_6888994503e5",
+    "id": "inc_8c49ce671011",
     "title": "Suspicious executable after privilege escalation",
     "severity": "critical",
     "riskScore": 100,

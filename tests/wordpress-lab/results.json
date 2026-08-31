@@ -17,7 +17,7 @@
     {
       "name": "Pairing code accepted by ScanSite",
       "pass": true,
-      "detail": "siteId=site_6daad1"
+      "detail": "siteId=site_bad7d6"
     },
     {
       "name": "Collector key stored in WordPress",
@@ -52,7 +52,7 @@
     {
       "name": "Heartbeat reaches ScanSite",
       "pass": true,
-      "detail": "lastSeenAt 1788199185936 -> 1788199186598"
+      "detail": "lastSeenAt 1788200710890 -> 1788200711534"
     },
     {
       "name": "Heartbeat reports real versions",
@@ -165,7 +165,7 @@
       "detected": "Yes",
       "payloadCorrect": "Yes",
       "duplicates": "No",
-      "notes": "username=test_admin role=administrator userId=8"
+      "notes": "username=test_admin role=administrator userId=28"
     },
     {
       "event": "logout",
@@ -181,7 +181,7 @@
       "detected": "Yes",
       "payloadCorrect": "Yes",
       "duplicates": "No",
-      "notes": "events=password_reset"
+      "notes": "events=password_reset,mail_error"
     },
     {
       "event": "registration_setting_changed",
@@ -213,7 +213,7 @@
       "detected": "Yes",
       "payloadCorrect": "Yes",
       "duplicates": "No",
-      "notes": "hook=lab_test_hook schedule=hourly nextRun=2026-08-31T18:59:53+00:00"
+      "notes": "hook=lab_test_hook schedule=hourly nextRun=2026-08-31T19:25:19+00:00"
     },
     {
       "event": "cron_removed",
@@ -229,7 +229,7 @@
       "detected": "Yes",
       "payloadCorrect": "Yes",
       "duplicates": "No",
-      "notes": "path=/.htaccess sha256=4874f51af42d… contents sent=no"
+      "notes": "path=/.htaccess sha256=4056c4a5c3bb… contents sent=no"
     },
     {
       "event": "wp_config_modified",
@@ -237,7 +237,7 @@
       "detected": "Yes",
       "payloadCorrect": "Yes",
       "duplicates": "No",
-      "notes": "sha256=4bebf2a0c7a5… secrets sent=no"
+      "notes": "sha256=cebb3ce87dc1… secrets sent=no"
     },
     {
       "event": "executable_created",
@@ -357,10 +357,10 @@
     },
     {
       "event": "ajax_error",
-      "tested": "Partial",
-      "detected": "Partial",
+      "tested": "Yes",
+      "detected": "Yes",
       "payloadCorrect": "Yes",
-      "notes": "attribution + action-name sanitising verified; the HTTP status gate is not reachable under php-wasm"
+      "notes": "action scansite_probe_action status 400 via the status filter seam"
     },
     {
       "event": "cron_error",
@@ -368,6 +368,27 @@
       "detected": "Yes",
       "payloadCorrect": "Yes",
       "notes": "hook scansite_probe_boom schedule hourly"
+    },
+    {
+      "event": "http_error",
+      "tested": "Yes",
+      "detected": "Yes",
+      "payloadCorrect": "Yes",
+      "notes": "HTTP 503 POST via the status filter seam"
+    },
+    {
+      "event": "wp_error",
+      "tested": "Yes",
+      "detected": "Yes",
+      "payloadCorrect": "Yes",
+      "notes": "http_request_failed from a real wp_remote_get() failure"
+    },
+    {
+      "event": "js_error",
+      "tested": "Yes",
+      "detected": "Yes",
+      "payloadCorrect": "Yes",
+      "notes": "intake route verified; the browser-side handler is not exercised (no browser in the lab)"
     }
   ],
   "queue": [
@@ -499,7 +520,7 @@
     {
       "name": "admin_init file hashing stays cheap",
       "pass": true,
-      "detail": "85 ms"
+      "detail": "110 ms"
     },
     {
       "name": "No secret-like keys or values in real payloads",
@@ -524,12 +545,12 @@
     {
       "name": "Timestamps are ISO 8601 UTC",
       "pass": true,
-      "detail": "2026-08-31T18:00:56+00:00"
+      "detail": "2026-08-31T18:26:20+00:00"
     },
     {
       "name": "Server stores UTC (offset +00:00)",
       "pass": true,
-      "detail": "2026-08-31T18:00:56+00:00"
+      "detail": "2026-08-31T18:26:20+00:00"
     },
     {
       "name": "eventId is unique",
@@ -611,11 +632,11 @@
   "performance": [
     {
       "name": "wp_insert_user with collector active",
-      "ms": 135
+      "ms": 132
     },
     {
       "name": "admin_init (config + uploads hashing)",
-      "ms": 85
+      "ms": 110
     },
     {
       "name": "update_option with collector active",
@@ -739,7 +760,7 @@
     {
       "name": "Capture is gated on a connected website",
       "pass": true,
-      "detail": "siteId=site_6daad1"
+      "detail": "siteId=site_bad7d6"
     },
     {
       "name": "A real PHP error is captured",
@@ -794,7 +815,7 @@
     {
       "name": "First/last seen are recorded",
       "pass": true,
-      "detail": "first=1788199259 last=1788199259"
+      "detail": "first=1788200784 last=1788200784"
     },
     {
       "name": "The actor is recorded when available",
@@ -904,7 +925,7 @@
     {
       "name": "First seen stays at the original occurrence",
       "pass": true,
-      "detail": "first=1788199260 last=1788199261"
+      "detail": "first=1788200786 last=1788200786"
     },
     {
       "name": "The total keeps climbing across reports",
@@ -1108,7 +1129,7 @@
     {
       "name": "The recipient is never sent",
       "pass": true,
-      "detail": "[{\"eventId\":\"evt_da6a2a12fb7e8c35\",\"schemaVersion\":1,\"site\":\"site_6daad1\",\"category\":\"error\",\"type\":\"mail_error\",\"timestamp\":\"2026-08-31T18:01:03+00:00\",\"actor\""
+      "detail": "[{\"eventId\":\"evt_adeaf1750679628b\",\"schemaVersion\":1,\"site\":\"site_bad7d6\",\"category\":\"error\",\"type\":\"mail_error\",\"timestamp\":\"2026-08-31T18:26:29+00:00\",\"actor\""
     },
     {
       "name": "A card number in the body is never sent",
@@ -1141,7 +1162,7 @@
     {
       "name": "The complete SQL statement is never sent",
       "pass": true,
-      "detail": "[{\"eventId\":\"evt_9f799d55c241b7b7\",\"schemaVersion\":1,\"site\":\"site_6daad1\",\"category\":\"error\",\"type\":\"db_error\",\"timestamp\":\"2026-08-31T18:01:04+00:00\",\"actor\":{\"userId\":1,\"username\":\"labadmin\",\"role\":"
+      "detail": "[{\"eventId\":\"evt_be26a39f518a1a4b\",\"schemaVersion\":1,\"site\":\"site_bad7d6\",\"category\":\"error\",\"type\":\"db_error\",\"timestamp\":\"2026-08-31T18:26:29+00:00\",\"actor\":{\"userId\":1,\"username\":\"labadmin\",\"role\":"
     },
     {
       "name": "No SELECT keyword survives in the message",
@@ -1155,7 +1176,7 @@
     {
       "name": "No database credential is sent",
       "pass": true,
-      "detail": "[{\"eventId\":\"evt_9f799d55c241b7b7\",\"schemaVersion\":1,\"site\":\"site_6daad1\",\"category\":\"error\",\"type\":\"db_error\",\"timestamp\":\"2026-08-31T18:01:04+00:00\",\"actor\":{\"userId\":1,\"username\":\"labadmin\",\"role\":"
+      "detail": "[{\"eventId\":\"evt_be26a39f518a1a4b\",\"schemaVersion\":1,\"site\":\"site_bad7d6\",\"category\":\"error\",\"type\":\"db_error\",\"timestamp\":\"2026-08-31T18:26:29+00:00\",\"actor\":{\"userId\":1,\"username\":\"labadmin\",\"role\":"
     },
     {
       "name": "describe_query reads a SELECT",
@@ -1218,6 +1239,36 @@
       "detail": "evilscriptalert1scriptactionDROPTABLEx--"
     },
     {
+      "name": "A failed admin-ajax request is captured",
+      "pass": true,
+      "detail": "queued=1 status=400"
+    },
+    {
+      "name": "The action name is recorded",
+      "pass": true,
+      "detail": "action=scansite_probe_action"
+    },
+    {
+      "name": "The status is recorded",
+      "pass": true,
+      "detail": "status=400"
+    },
+    {
+      "name": "The request path is recorded",
+      "pass": true,
+      "detail": "/wp-admin/admin-ajax.php"
+    },
+    {
+      "name": "The owning plugin is resolved for the captured event",
+      "pass": true,
+      "detail": "plugin/scansite-signal-probe"
+    },
+    {
+      "name": "No posted form field reaches the captured event",
+      "pass": true,
+      "detail": "[{\"eventId\":\"evt_e5dd62c66a83e903\",\"schemaVersion\":1,\"site\":\"site_bad7d6\",\"category\":\"error\",\"type\":\"ajax_error\",\"timestamp\":\"2026-08-31T18:26:31+00:00\",\"actor\""
+    },
+    {
       "name": "The cron hook is captured while it runs",
       "pass": true,
       "detail": "{\"hook\":\"scansite_probe_cleanup\",\"schedule\":\"twicedaily\",\"args\":1}"
@@ -1266,6 +1317,126 @@
       "name": "A cron failure is grouped by hook, not by message",
       "pass": true,
       "detail": "fp=47a2e87074426d37cccfd031"
+    },
+    {
+      "name": "An HTTP 503 response is captured",
+      "pass": true,
+      "detail": "queued=1 status=503"
+    },
+    {
+      "name": "The status is recorded",
+      "pass": true,
+      "detail": "status=503"
+    },
+    {
+      "name": "The request path is recorded",
+      "pass": true,
+      "detail": "/wp-json/wc/v3/orders/1234"
+    },
+    {
+      "name": "The HTTP method is recorded",
+      "pass": true,
+      "detail": "POST"
+    },
+    {
+      "name": "A response time is recorded when the server provides one",
+      "pass": true,
+      "detail": "ms=250"
+    },
+    {
+      "name": "The fingerprint groups by status and route, not by id",
+      "pass": true,
+      "detail": "fp=33e45ee31001bd64125a06b4"
+    },
+    {
+      "name": "Two ids on one route share a fingerprint",
+      "pass": true,
+      "detail": "[\"d00f6fc505a1d6d611255db0\",\"d00f6fc505a1d6d611255db0\"]"
+    },
+    {
+      "name": "A 200 response records nothing",
+      "pass": true,
+      "detail": "queued=0"
+    },
+    {
+      "name": "A failed outbound request is captured as a WP_Error",
+      "pass": true,
+      "detail": "queued=1 isError=true code=http_request_failed"
+    },
+    {
+      "name": "The WP_Error code is recorded",
+      "pass": true,
+      "detail": "code=http_request_failed"
+    },
+    {
+      "name": "The message is recorded",
+      "pass": true,
+      "detail": "cURL error 55: Send failure: Socket not connected"
+    },
+    {
+      "name": "Only the host is kept from the request URL, not its query string",
+      "pass": true,
+      "detail": "source=scansite-unreachable.invalid"
+    },
+    {
+      "name": "No API key from the request URL is sent",
+      "pass": true,
+      "detail": "[{\"eventId\":\"evt_d5dc768e3e0882c7\",\"schemaVersion\":1,\"site\":\"site_bad7d6\",\"category\":\"error\",\"type\":\"wp_error\",\"timestamp\":\"2026-08-31T18:26:34+00:00\",\"actor\":{"
+    },
+    {
+      "name": "The context says what kind of call failed",
+      "pass": true,
+      "detail": "context=outbound HTTP request"
+    },
+    {
+      "name": "ScanSite's own failed delivery is not recorded as a site error",
+      "pass": true,
+      "detail": "queued=0"
+    },
+    {
+      "name": "A transport retry is not recorded as a failure",
+      "pass": true,
+      "detail": "queued=0"
+    },
+    {
+      "name": "A browser-reported JS error is captured",
+      "pass": true,
+      "detail": "queued=1"
+    },
+    {
+      "name": "The message is recorded",
+      "pass": true,
+      "detail": "Cannot read properties of undefined (reading \"?\")"
+    },
+    {
+      "name": "The script URL is recorded without its query string",
+      "pass": true,
+      "detail": "script=/wp-content/plugins/woocommerce/assets/js/cart.js"
+    },
+    {
+      "name": "The line and column are recorded",
+      "pass": true,
+      "detail": "line=128 col=7"
+    },
+    {
+      "name": "The page URL is recorded without its query string",
+      "pass": true,
+      "detail": "page=/checkout/"
+    },
+    {
+      "name": "No query-string value from either URL is sent",
+      "pass": true,
+      "detail": "[{\"eventId\":\"evt_c55e3d691243022d\",\"schemaVersion\":1,\"site\":\"site_bad7d6\",\"category\":\"error\",\"type\":\"js_error\",\"timestamp\":\"2026-08-31T18:26:36+00:00\",\"actor\":{"
+    },
+    {
+      "name": "An unpaired site prints no reporter into its pages",
+      "pass": true,
+      "detail": "paired=false len=0"
+    },
+    {
+      "name": "The collector key is restored for the tests that follow",
+      "pass": true,
+      "detail": "restored=true"
     },
     {
       "name": "Two failing numeric ids are one route",

@@ -338,16 +338,42 @@ lab_dump('action', $ref->invoke( null ) );`);
   note('signals', 'The action name is reduced to safe characters',
     typeof actionSan.markers.action === 'string' && !/[^a-zA-Z0-9_\-]/.test(actionSan.markers.action), String(actionSan.markers.action));
 
-  // Honest matrix entry: the capture path was exercised only as far as
-  // php-wasm allows. http_response_code() is a no-op in this runtime, so
-  // record_ajax_error() always sees 200 and correctly records nothing.
-  // Attribution and action-name sanitising were verified; the status gate that
-  // decides whether a failed request is captured was not.
+  // Drive the real capture path end to end. php-wasm cannot set
+  // http_response_code(), so the status is supplied through the documented
+  // filter seam — the code under test (gate, attribution, sanitising, queue)
+  // is the shipped code, and only the status source is substituted.
+  await reset(php);
+  const ajaxFail = await phpRun(php, `
+${REQUIRE}
+lab_login_admin();
+$_SERVER['REQUEST_URI']    = '/wp-admin/admin-ajax.php';
+$_SERVER['REQUEST_METHOD'] = 'POST';
+$_REQUEST['action']        = 'scansite_probe_action';
+$_POST['card_number']      = '4242424242424242';   // must never be sent
+if ( ! defined( 'DOING_AJAX' ) ) { define( 'DOING_AJAX', true ); }
+add_filter( 'scansite_blackbox_response_status', function () { return 400; } );
+lab_dump('status', ScanSite_BB_Error_Capture::response_status() );
+ScanSite_BB_Error_Signals::record_ajax_error();
+lab_dump_queue();`);
+
+  const af = of(ajaxFail.markers.QUEUE ?? [], 'ajax_error');
+  const am = af[0]?.metadata ?? {};
+
+  note('signals', 'A failed admin-ajax request is captured', af.length === 1, `queued=${af.length} status=${ajaxFail.markers.status}`);
+  note('signals', 'The action name is recorded', am.ajaxAction === 'scansite_probe_action', `action=${am.ajaxAction}`);
+  note('signals', 'The status is recorded', am.status === 400, `status=${am.status}`);
+  note('signals', 'The request path is recorded',
+    typeof am.requestPath === 'string' && am.requestPath.length > 0, String(am.requestPath));
+  note('signals', 'The owning plugin is resolved for the captured event',
+    am.component === 'plugin' && am.componentSlug === PROBE_SLUG, `${am.component}/${am.componentSlug}`);
+  note('signals', 'No posted form field reaches the captured event',
+    !JSON.stringify(af).includes('4242424242424242'), JSON.stringify(af).slice(0, 160));
+
   matrix('ajax_error', {
-    tested: 'Partial',
-    detected: 'Partial',
-    payloadCorrect: owner.slug === PROBE_SLUG ? 'Yes' : 'No',
-    notes: 'attribution + action-name sanitising verified; the HTTP status gate is not reachable under php-wasm',
+    tested: 'Yes',
+    detected: af.length === 1 ? 'Yes' : 'No',
+    payloadCorrect: am.ajaxAction === 'scansite_probe_action' && am.status === 400 ? 'Yes' : 'No',
+    notes: af.length ? `action ${am.ajaxAction} status ${am.status} via the status filter seam` : 'not captured',
   });
 
   /* --------------------------------------------------------------- cron */
@@ -421,6 +447,197 @@ ${REQUIRE}
     payloadCorrect: cm.cronHook === 'scansite_probe_boom' && cm.schedule === 'hourly' ? 'Yes' : 'No',
     notes: cronEvents.length ? `hook ${cm.cronHook} schedule ${cm.schedule}` : 'not captured',
   });
+
+  /* --------------------------------------------------------------- http */
+  console.log('\n--- an HTTP error response ---');
+
+  // Driven through the same status seam. The gate, route grouping, fingerprint
+  // and queue are all the shipped code; only the status source is substituted,
+  // because php-wasm cannot set a response status at all.
+  await reset(php);
+  const http = await phpRun(php, `
+lab_login_admin();
+$_SERVER['REQUEST_URI']         = '/wp-json/wc/v3/orders/1234';
+$_SERVER['REQUEST_METHOD']      = 'POST';
+$_SERVER['REQUEST_TIME_FLOAT']  = microtime( true ) - 0.25;
+add_filter( 'scansite_blackbox_response_status', function () { return 503; } );
+lab_dump('status', ScanSite_BB_Error_Capture::response_status() );
+ScanSite_BB_Error_Capture::on_shutdown();
+lab_dump_queue();`);
+
+  const httpEvents = of(http.markers.QUEUE ?? [], 'http_error');
+  const hm = httpEvents[0]?.metadata ?? {};
+
+  note('signals', 'An HTTP 503 response is captured', httpEvents.length === 1, `queued=${httpEvents.length} status=${http.markers.status}`);
+  note('signals', 'The status is recorded', hm.status === 503, `status=${hm.status}`);
+  note('signals', 'The request path is recorded', typeof hm.requestPath === 'string' && hm.requestPath.length > 0, String(hm.requestPath));
+  note('signals', 'The HTTP method is recorded', hm.requestMethod === 'POST', String(hm.requestMethod));
+  note('signals', 'A response time is recorded when the server provides one',
+    typeof hm.responseTimeMs === 'number' && hm.responseTimeMs > 0, `ms=${hm.responseTimeMs}`);
+  note('signals', 'The fingerprint groups by status and route, not by id',
+    typeof hm.fingerprint === 'string' && hm.fingerprint.length === 24, `fp=${hm.fingerprint}`);
+  matrix('http_error', {
+    tested: 'Yes',
+    detected: httpEvents.length === 1 ? 'Yes' : 'No',
+    payloadCorrect: hm.status === 503 && hm.requestMethod === 'POST' ? 'Yes' : 'No',
+    notes: httpEvents.length ? `HTTP ${hm.status} ${hm.requestMethod} via the status filter seam` : 'not captured',
+  });
+
+  // Two ids on one route must collapse into one group.
+  await reset(php);
+  const httpRoutes = await phpRun(php, `
+lab_login_admin();
+add_filter( 'scansite_blackbox_response_status', function () { return 404; } );
+$_SERVER['REQUEST_METHOD'] = 'GET';
+foreach ( array( '/wp-json/wc/v3/orders/1234', '/wp-json/wc/v3/orders/5678' ) as $u ) {
+	$_SERVER['REQUEST_URI'] = $u;
+	update_option( ScanSite_BB_Error_Capture::OPT_STATE, array(), false );
+	ScanSite_BB_Error_Capture::on_shutdown();
+}
+lab_dump_queue();`);
+  const routeFps = of(httpRoutes.markers.QUEUE ?? [], 'http_error').map((e) => e.metadata.fingerprint);
+  note('signals', 'Two ids on one route share a fingerprint',
+    routeFps.length === 2 && routeFps[0] === routeFps[1], JSON.stringify(routeFps));
+
+  // A success status must record nothing.
+  await reset(php);
+  const httpOk = await phpRun(php, `
+lab_login_admin();
+$_SERVER['REQUEST_URI'] = '/checkout/';
+add_filter( 'scansite_blackbox_response_status', function () { return 200; } );
+ScanSite_BB_Error_Capture::on_shutdown();
+lab_dump_queue();`);
+  note('signals', 'A 200 response records nothing',
+    of(httpOk.markers.QUEUE ?? [], 'http_error').length === 0, `queued=${of(httpOk.markers.QUEUE ?? [], 'http_error').length}`);
+
+  /* ------------------------------------------------------------- WP_Error */
+  console.log('\n--- a WP_Error from an outbound request ---');
+
+  // WordPress fires http_api_debug after every wp_remote_*() call. The request
+  // has to really fail for the hook to fire — a pre_http_request stub returns
+  // from WP_Http::request() before http_api_debug is reached.
+  await reset(php);
+  const wpErr = await phpRun(php, `
+${REQUIRE}
+lab_login_admin();
+add_filter( 'http_request_args', function ( $args ) {
+	$args['timeout']     = 1;
+	$args['redirection'] = 0;
+	return $args;
+} );
+$res = wp_remote_get( 'http://scansite-unreachable.invalid/charge?api_key=sk_live_99887766' );
+lab_dump('isError', is_wp_error( $res ) );
+lab_dump('code', is_wp_error( $res ) ? $res->get_error_code() : '-' );
+lab_dump_queue();`);
+
+  const wpEvents = of(wpErr.markers.QUEUE ?? [], 'wp_error');
+  const wm = wpEvents[0]?.metadata ?? {};
+  const wpJson = JSON.stringify(wpEvents);
+
+  note('signals', 'A failed outbound request is captured as a WP_Error',
+    wpEvents.length === 1, `queued=${wpEvents.length} isError=${wpErr.markers.isError} code=${wpErr.markers.code}`);
+  note('signals', 'The WP_Error code is recorded',
+    typeof wm.errorCode === 'string' && wm.errorCode.length > 0 && wm.errorCode === wpErr.markers.code,
+    `code=${wm.errorCode}`);
+  note('signals', 'The message is recorded',
+    typeof wm.message === 'string' && wm.message.length > 0, String(wm.message).slice(0, 80));
+  note('signals', 'Only the host is kept from the request URL, not its query string',
+    wm.source === 'scansite-unreachable.invalid', `source=${wm.source}`);
+  note('signals', 'No API key from the request URL is sent',
+    !wpJson.includes('sk_live_99887766'), wpJson.slice(0, 160));
+  note('signals', 'The context says what kind of call failed',
+    wm.context === 'outbound HTTP request', `context=${wm.context}`);
+  matrix('wp_error', {
+    tested: 'Yes',
+    detected: wpEvents.length === 1 ? 'Yes' : 'No',
+    payloadCorrect: wm.source === 'scansite-unreachable.invalid' && wm.errorCode === wpErr.markers.code ? 'Yes' : 'No',
+    notes: wpEvents.length ? `${wm.errorCode} from a real wp_remote_get() failure` : 'not captured',
+  });
+
+  // The collector's own delivery failing is not the site's error.
+  await reset(php);
+  const ownEndpoint = await phpRun(php, `
+lab_login_admin();
+ScanSite_BB_Error_Signals::on_http_api_debug(
+	new WP_Error( 'http_request_failed', 'Could not resolve host' ),
+	'response', 'WpOrg', array(), ScanSite_BB_Connection::endpoint() . '/api/blackbox/ingest'
+);
+lab_dump_queue();`);
+  note('signals', "ScanSite's own failed delivery is not recorded as a site error",
+    of(ownEndpoint.markers.QUEUE ?? [], 'wp_error').length === 0,
+    `queued=${of(ownEndpoint.markers.QUEUE ?? [], 'wp_error').length}`);
+
+  // A transport-context WP_Error is an internal retry and must not be recorded.
+  await reset(php);
+  const wpTransport = await phpRun(php, `
+lab_login_admin();
+ScanSite_BB_Error_Signals::on_http_api_debug( new WP_Error( 'http_request_failed', 'retrying' ), 'transport' );
+lab_dump_queue();`);
+  note('signals', 'A transport retry is not recorded as a failure',
+    of(wpTransport.markers.QUEUE ?? [], 'wp_error').length === 0,
+    `queued=${of(wpTransport.markers.QUEUE ?? [], 'wp_error').length}`);
+
+  /* ----------------------------------------------------------- JS errors */
+  console.log('\n--- a JavaScript error reported from the browser ---');
+
+  await reset(php);
+  const js = await phpRun(php, `
+${REQUIRE}
+lab_login_admin();
+$req = new WP_REST_Request( 'POST', '/scansite-blackbox/v1/js-error' );
+$req->set_param( 'message', 'Cannot read properties of undefined (reading "price")' );
+$req->set_param( 'scriptUrl', 'https://example.com/wp-content/plugins/woocommerce/assets/js/cart.js?ver=123' );
+$req->set_param( 'line', 128 );
+$req->set_param( 'column', 7 );
+$req->set_param( 'pageUrl', 'https://example.com/checkout/?order=99887766' );
+$resp = ScanSite_BB_Error_Signals::on_js_report( $req );
+lab_dump('ok', is_object( $resp ) );
+lab_dump_queue();`);
+
+  const jsEvents = of(js.markers.QUEUE ?? [], 'js_error');
+  const jm = jsEvents[0]?.metadata ?? {};
+  const jsJson = JSON.stringify(jsEvents);
+
+  note('signals', 'A browser-reported JS error is captured', jsEvents.length === 1, `queued=${jsEvents.length}`);
+  note('signals', 'The message is recorded',
+    typeof jm.message === 'string' && jm.message.includes('Cannot read properties'), String(jm.message).slice(0, 70));
+  note('signals', 'The script URL is recorded without its query string',
+    jm.scriptUrl === '/wp-content/plugins/woocommerce/assets/js/cart.js', `script=${jm.scriptUrl}`);
+  note('signals', 'The line and column are recorded',
+    jm.line === 128 && jm.column === 7, `line=${jm.line} col=${jm.column}`);
+  note('signals', 'The page URL is recorded without its query string',
+    jm.pageUrl === '/checkout/', `page=${jm.pageUrl}`);
+  note('signals', 'No query-string value from either URL is sent',
+    !jsJson.includes('99887766'), jsJson.slice(0, 160));
+  matrix('js_error', {
+    tested: 'Yes',
+    detected: jsEvents.length === 1 ? 'Yes' : 'No',
+    payloadCorrect: jm.line === 128 && jm.pageUrl === '/checkout/' ? 'Yes' : 'No',
+    notes: jsEvents.length ? 'intake route verified; the browser-side handler is not exercised (no browser in the lab)' : 'not captured',
+  });
+
+  // The reporter must only be printed when the collector is paired.
+  const unpaired = await phpRun(php, `
+lab_login_admin();
+// Clearing the collector key makes the site unpaired: has_credentials() is
+// false, so nothing should be printed into its pages. The key is restored in
+// the same run — leaving it cleared would stop every later test queueing.
+$saved = get_option( ScanSite_BB_Connection::OPT_KEY, '' );
+update_option( ScanSite_BB_Connection::OPT_KEY, '', false );
+lab_dump('paired', ScanSite_BB_Connection::has_credentials() );
+$ref = new ReflectionProperty( 'ScanSite_BB_Error_Signals', 'reporter_printed' );
+$ref->setAccessible( true );
+$ref->setValue( null, false );
+ob_start();
+ScanSite_BB_Error_Signals::print_js_reporter();
+lab_dump('out', trim( ob_get_clean() ) );
+update_option( ScanSite_BB_Connection::OPT_KEY, $saved, false );
+lab_dump('restored', ScanSite_BB_Connection::has_credentials() );`);
+  note('signals', 'An unpaired site prints no reporter into its pages',
+    unpaired.markers.paired === false && unpaired.markers.out === '',
+    `paired=${unpaired.markers.paired} len=${String(unpaired.markers.out ?? '').length}`);
+  note('signals', 'The collector key is restored for the tests that follow',
+    unpaired.markers.restored === true, `restored=${unpaired.markers.restored}`);
 
   /* ------------------------------------------------- route normalisation */
   console.log('\n--- routes group by endpoint, not by id ---');

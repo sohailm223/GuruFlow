@@ -173,11 +173,7 @@ class ScanSite_BB_Error_Capture {
 	 * request failed and nothing in the log explains why yet.
 	 */
 	private static function capture_http_error() {
-		if ( ! function_exists( 'http_response_code' ) ) {
-			return;
-		}
-
-		$status = (int) http_response_code();
+		$status = self::response_status();
 		if ( ! in_array( $status, self::HTTP_ERROR_STATUSES, true ) ) {
 			return;
 		}
@@ -233,6 +229,22 @@ class ScanSite_BB_Error_Capture {
 	 *
 	 * @return int|null
 	 */
+	/**
+	 * The status this request ended with.
+	 *
+	 * Read through a filter because http_response_code() is a no-op under
+	 * php-wasm, which would otherwise make the whole capture path untestable.
+	 * The default is the real response code, so production behaviour is
+	 * unchanged; the seam exists so a test can drive the gate that decides
+	 * whether a response counts as an error.
+	 *
+	 * @return int
+	 */
+	public static function response_status() {
+		$status = function_exists( 'http_response_code' ) ? (int) http_response_code() : 0;
+		return (int) apply_filters( 'scansite_blackbox_response_status', $status );
+	}
+
 	private static function response_time_ms() {
 		$start = isset( $_SERVER['REQUEST_TIME_FLOAT'] ) ? (float) $_SERVER['REQUEST_TIME_FLOAT'] : 0.0;
 		if ( $start <= 0 ) {

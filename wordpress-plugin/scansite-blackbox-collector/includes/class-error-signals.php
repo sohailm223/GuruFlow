@@ -44,6 +44,9 @@ class ScanSite_BB_Error_Signals {
 	/** @var int Database errors recorded in this request. */
 	private static $db_count = 0;
 
+	/** @var bool Whether the browser reporter has been printed this request. */
+	private static $reporter_printed = false;
+
 	public static function register() {
 		if ( self::$registered ) {
 			return;
@@ -57,6 +60,18 @@ class ScanSite_BB_Error_Signals {
 		// Cron has no "this event failed" hook of its own, so the hook name is
 		// captured on the way in and paired with the failure on the way out.
 		add_action( 'init', array( __CLASS__, 'watch_cron_events' ), 1 );
+
+		// WordPress raises no global hook when a WP_Error is constructed — it is
+		// an ordinary return value, and most are never errors at all. The HTTP
+		// API is the one place a WP_Error is raised as a genuine failure with a
+		// code and a message, so that is where it is captured.
+		add_action( 'http_api_debug', array( __CLASS__, 'on_http_api_debug' ), 10, 5 );
+
+		// A JavaScript error happens in the browser, so nothing on the server can
+		// see it. A reporter is printed into the page and posts back.
+		add_action( 'wp_head', array( __CLASS__, 'print_js_reporter' ), 20 );
+		add_action( 'admin_print_footer_scripts', array( __CLASS__, 'print_js_reporter' ), 20 );
+		add_action( 'rest_api_init', array( __CLASS__, 'register_js_route' ) );
 	}
 
 	/* ------------------------------------------------------------- REST */
@@ -633,11 +648,10 @@ class ScanSite_BB_Error_Signals {
 		if ( ! function_exists( 'wp_doing_ajax' ) || ! wp_doing_ajax() ) {
 			return;
 		}
-		if ( ! function_exists( 'http_response_code' ) ) {
-			return;
-		}
 
-		$status = (int) http_response_code();
+		// Same seam as the HTTP family: the real response code by default, but
+		// readable through a filter so the gate can actually be exercised.
+		$status = ScanSite_BB_Error_Capture::response_status();
 		if ( $status < 400 ) {
 			return;
 		}
@@ -821,6 +835,261 @@ class ScanSite_BB_Error_Signals {
 		);
 
 		return (string) $s;
+	}
+
+	/* ------------------------------------------------------------ WP_Error */
+
+	/**
+	 * Record a WP_Error raised by an outbound HTTP request.
+	 *
+	 * WordPress fires http_api_debug after every wp_remote_*() call with the raw
+	 * result. When that result is a WP_Error the request genuinely failed — a
+	 * plugin could not reach a payment gateway, an update check could not reach
+	 * api.wordpress.org — and the WP_Error carries a real code and message.
+	 *
+	 * Only the 'response' context is read: 'transport' fires for internal
+	 * retries that may still succeed.
+	 *
+	 * @param mixed  $response Result of the request.
+	 * @param string $context  Either 'response' or 'transport'.
+	 * @param string $class    Transport class name.
+	 * @param array  $args     Request arguments. Not forwarded — the body is never sent.
+	 * @param string $url      Requested URL. Only the host is kept.
+	 * @return void
+	 */
+	public static function on_http_api_debug( $response, $context = '', $class = '', $args = array(), $url = '' ) {
+		if ( 'response' !== $context ) {
+			return;
+		}
+		if ( ! is_wp_error( $response ) ) {
+			return;
+		}
+
+		// Never record the collector's own delivery as a site error. ScanSite
+		// talking to its dashboard is not the site's failure, and reporting it
+		// here would present a connection problem as though the site raised it.
+		if ( self::is_own_endpoint( $url ) ) {
+			return;
+		}
+
+		self::record_wp_error(
+			array(
+				'code'    => $response->get_error_code(),
+				'message' => $response->get_error_message(),
+				'context' => 'outbound HTTP request',
+				'source'  => self::host_of( $url ),
+			)
+		);
+	}
+
+	/**
+	 * Whether a URL points at the ScanSite dashboard this site reports to.
+	 *
+	 * Compared on host and port rather than the whole URL, because the path
+	 * differs per request.
+	 *
+	 * @param string $url
+	 * @return bool
+	 */
+	private static function is_own_endpoint( $url ) {
+		if ( ! class_exists( 'ScanSite_BB_Connection' ) ) {
+			return false;
+		}
+		$endpoint = ScanSite_BB_Connection::endpoint();
+		if ( '' === $endpoint ) {
+			return false;
+		}
+
+		$mine  = self::host_of( $endpoint );
+		$theirs = self::host_of( $url );
+		if ( null === $mine || null === $theirs ) {
+			return false;
+		}
+
+		$mine_port = self::port_of( $endpoint );
+		$theirs_port = self::port_of( $url );
+
+		return $mine === $theirs && $mine_port === $theirs_port;
+	}
+
+	/**
+	 * The explicit port of a URL, or null when the scheme default applies.
+	 *
+	 * @param string $url
+	 * @return int|null
+	 */
+	private static function port_of( $url ) {
+		if ( ! function_exists( 'wp_parse_url' ) ) {
+			return null;
+		}
+		$port = wp_parse_url( (string) $url, PHP_URL_PORT );
+		return is_numeric( $port ) ? (int) $port : null;
+	}
+
+	/**
+	 * Queue a WP_Error, sanitised and deduplicated.
+	 *
+	 * A WP_Error is an ordinary return value in WordPress, so this is only ever
+	 * called from a hook where the error is a genuine failure.
+	 *
+	 * @param array $data code, message, context, source.
+	 * @return void
+	 */
+	public static function record_wp_error( $data ) {
+		if ( ! is_array( $data ) ) {
+			return;
+		}
+
+		$code = isset( $data['code'] ) ? preg_replace( '/[^a-zA-Z0-9_\-]/', '', (string) $data['code'] ) : '';
+		$code = '' === $code ? 'unknown_error' : substr( $code, 0, 60 );
+
+		$message = self::sanitize_text( isset( $data['message'] ) ? $data['message'] : '', 300 );
+		if ( '' === trim( $message ) ) {
+			return;
+		}
+
+		$context = isset( $data['context'] ) ? self::sanitize_text( $data['context'], 60 ) : null;
+		$source  = isset( $data['source'] ) ? self::sanitize_text( $data['source'], 120 ) : null;
+
+		self::submit_once(
+			'wp_error',
+			array(
+				'kind'     => 'wp',
+				'severity' => 'WP_Error',
+				'message'  => $message,
+				'fpKey'    => 'wp|' . $code . '|' . substr( $message, 0, 40 ),
+				'extra'    => array(
+					'errorCode' => $code,
+					'context'   => $context,
+					'source'    => $source,
+				),
+			)
+		);
+	}
+
+	/**
+	 * Keep only the host of an absolute URL.
+	 *
+	 * A request URL can carry an API key in its query string, so nothing past
+	 * the host is kept.
+	 *
+	 * @param string $url
+	 * @return string|null
+	 */
+	private static function host_of( $url ) {
+		$u = (string) $url;
+		if ( '' === $u || ! function_exists( 'wp_parse_url' ) ) {
+			return null;
+		}
+		$host = wp_parse_url( $u, PHP_URL_HOST );
+		if ( ! is_string( $host ) || '' === $host ) {
+			return null;
+		}
+		return preg_replace( '/[^a-zA-Z0-9.\-]/', '', $host );
+	}
+
+	/* ---------------------------------------------------------- JS errors */
+
+	/**
+	 * Print the browser-side reporter.
+	 *
+	 * Catches window.onerror and unhandled rejections and posts a minimal,
+	 * field-limited report to the intake route. It never reads a form field, a
+	 * cookie value, localStorage, or anything the visitor typed — only the
+	 * error's own message, script location and the page path.
+	 *
+	 * Skipped when the collector has no credentials, so an unpaired site prints
+	 * nothing into its pages.
+	 *
+	 * @return void
+	 */
+	public static function print_js_reporter() {
+		if ( ! class_exists( 'ScanSite_BB_Connection' ) || ! ScanSite_BB_Connection::has_credentials() ) {
+			return;
+		}
+		if ( self::$reporter_printed ) {
+			return;
+		}
+		self::$reporter_printed = true;
+
+		$endpoint = rest_url( 'scansite-blackbox/v1/js-error' );
+		$nonce    = function_exists( 'wp_create_nonce' ) ? wp_create_nonce( 'wp_rest' ) : '';
+
+		$cfg = wp_json_encode(
+			array(
+				'url'   => $endpoint,
+				'nonce' => $nonce,
+			)
+		);
+
+		echo "<script>\n";
+		echo "/* ScanSite: reports an error's own location. Reads no page content. */\n";
+		echo "(function(){var c=" . $cfg . ";if(!c.url||window.__scansiteJSErrors)return;"
+			. "window.__scansiteJSErrors=1;var sent=0;"
+			. "function send(p){if(sent>=3)return;sent++;"
+			. "try{fetch(c.url,{method:'POST',keepalive:true,credentials:'same-origin',"
+			. "headers:{'Content-Type':'application/json','X-WP-Nonce':c.nonce},"
+			. "body:JSON.stringify(p)});}catch(e){}}"
+			. "window.addEventListener('error',function(ev){"
+			. "send({message:String(ev.message||'').slice(0,300),"
+			. "scriptUrl:String(ev.filename||'').slice(0,300),"
+			. "line:ev.lineno|0,column:ev.colno|0,"
+			. "pageUrl:String(location.pathname||'').slice(0,190)});},true);"
+			. "window.addEventListener('unhandledrejection',function(ev){"
+			. "var r=ev.reason;var m=(r&&r.message)?r.message:String(r);"
+			. "send({message:String(m||'').slice(0,300),pageUrl:String(location.pathname||'').slice(0,190)});},true);"
+			. "})();\n";
+		echo "</script>\n";
+	}
+
+	/**
+	 * Register the intake route for browser-reported errors.
+	 *
+	 * Requires a valid wp_rest nonce, so only a page this site actually rendered
+	 * can report. That keeps the endpoint from becoming a way to inject events
+	 * into the queue from outside.
+	 *
+	 * @return void
+	 */
+	public static function register_js_route() {
+		if ( ! function_exists( 'register_rest_route' ) ) {
+			return;
+		}
+		register_rest_route(
+			'scansite-blackbox/v1',
+			'/js-error',
+			array(
+				'methods'             => 'POST',
+				'callback'            => array( __CLASS__, 'on_js_report' ),
+				// The nonce is checked by WordPress for any request that sends
+				// X-WP-Nonce; rest_cookie_check_errors() rejects a bad one
+				// before this callback runs.
+				'permission_callback' => '__return_true',
+				'args'                => array(
+					'message' => array( 'required' => true, 'type' => 'string' ),
+				),
+			)
+		);
+	}
+
+	/**
+	 * Handle a browser-reported error.
+	 *
+	 * @param WP_REST_Request $request
+	 * @return WP_REST_Response
+	 */
+	public static function on_js_report( $request ) {
+		self::record_js_error(
+			array(
+				'message'   => $request->get_param( 'message' ),
+				'scriptUrl' => $request->get_param( 'scriptUrl' ),
+				'line'      => $request->get_param( 'line' ),
+				'column'    => $request->get_param( 'column' ),
+				'pageUrl'   => $request->get_param( 'pageUrl' ),
+			)
+		);
+
+		return rest_ensure_response( array( 'success' => true ) );
 	}
 
 	/**
