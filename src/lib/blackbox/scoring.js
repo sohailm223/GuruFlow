@@ -217,6 +217,49 @@ export function scoreEvent(e) {
       break;
     }
 
+    case "rest_error": {
+      const n = Math.min(e.metadata?.occurrences ?? 1, 20);
+      const st = e.metadata?.status ? ` (HTTP ${e.metadata.status})` : "";
+      add(20 + n, `REST API request failed${st}${n > 1 ? ` (${n} occurrences)` : ""} (impact)`);
+      break;
+    }
+
+    case "ajax_error": {
+      const n = Math.min(e.metadata?.occurrences ?? 1, 20);
+      add(18 + n, `admin-ajax request failed${n > 1 ? ` (${n} occurrences)` : ""} (impact)`);
+      break;
+    }
+
+    case "db_error": {
+      const n = Math.min(e.metadata?.occurrences ?? 1, 20);
+      add(28 + n, `Database error recorded${n > 1 ? ` (${n} occurrences)` : ""} (impact)`);
+      break;
+    }
+
+    case "mail_error": {
+      const n = Math.min(e.metadata?.occurrences ?? 1, 20);
+      add(12 + n, `Email delivery failed${n > 1 ? ` (${n} occurrences)` : ""} (impact)`);
+      break;
+    }
+
+    case "cron_error": {
+      const n = Math.min(e.metadata?.occurrences ?? 1, 20);
+      add(20 + n, `Scheduled task failed${n > 1 ? ` (${n} occurrences)` : ""} (impact)`);
+      break;
+    }
+
+    case "js_error": {
+      const n = Math.min(e.metadata?.occurrences ?? 1, 20);
+      add(10 + n, `Browser JavaScript error recorded${n > 1 ? ` (${n} occurrences)` : ""} (impact)`);
+      break;
+    }
+
+    case "wp_error": {
+      const n = Math.min(e.metadata?.occurrences ?? 1, 20);
+      add(14 + n, `WordPress raised an error${n > 1 ? ` (${n} occurrences)` : ""} (impact)`);
+      break;
+    }
+
     case "site_error_burst":
       add(25, "Site started returning errors (impact)");
       break;

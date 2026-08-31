@@ -509,9 +509,9 @@ export function buildVerificationTargets(incident, targets = extractTargets(inci
   // Error evidence: only present when the collector recorded errors for this
   // incident. Each check says plainly what would count as resolved.
   for (const g of errorGroups(incident)) {
-    const label = g.relativePath
-      ? `${g.severity ?? "PHP error"} in ${g.relativePath}${g.line ? `:${g.line}` : ""}`
-      : `${g.severity ?? "PHP error"} at an unknown location`;
+    // whatFailed/where are family-aware, so a refused REST request is
+    // labelled as one rather than as "PHP error at an unknown location".
+    const label = g.where ? `${g.whatFailed ?? "Error"} — ${g.where}` : (g.whatFailed ?? g.severity ?? "Recorded error");
     checks.push({
       id: `error:${g.fingerprint}`,
       kind: "error",

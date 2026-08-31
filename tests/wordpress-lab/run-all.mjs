@@ -12,6 +12,7 @@ import { runUpgraderTests } from './t-upgrader.mjs';
 import { runCollectorTests } from './t-collector.mjs';
 import { runScenario } from './t-scenario.mjs';
 import { runErrorTests } from './t-errors.mjs';
+import { runErrorSignalTests } from './t-error-signals.mjs';
 import { summary, saveResults, phpRun, results, pruneLabSites } from './harness.mjs';
 import { readFileSync } from 'node:fs';
 
@@ -42,6 +43,7 @@ await runUpgraderTests(php);
 await runCollectorTests(php, siteId);
 await runScenario(php, siteId);
 await runErrorTests(php, siteId);
+await runErrorSignalTests(php);
 summary();
 saveResults('results.json');
 

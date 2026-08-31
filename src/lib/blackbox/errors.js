@@ -41,7 +41,43 @@ export function componentLabel(id) {
   return COMPONENT_LABELS[id] ?? "Unknown";
 }
 
-const isErrorEvent = (e) => e?.type === "php_error" || e?.type === "http_error";
+/**
+ * The error families, and the event type each one is recorded as.
+ *
+ * One entry per family rather than one per type, because the UI filters and
+ * the fix steps are written against families. A family that the collector does
+ * not emit yet still belongs here, so an event of that type arriving from
+ * anywhere is grouped and rendered correctly instead of being dropped.
+ */
+export const ERROR_KINDS = [
+  { id: "php", label: "PHP", types: ["php_error"] },
+  { id: "http", label: "HTTP", types: ["http_error"] },
+  { id: "rest", label: "REST", types: ["rest_error"] },
+  { id: "ajax", label: "AJAX", types: ["ajax_error"] },
+  { id: "database", label: "Database", types: ["db_error"] },
+  { id: "email", label: "Email", types: ["mail_error"] },
+  { id: "cron", label: "Cron", types: ["cron_error"] },
+  { id: "javascript", label: "JavaScript", types: ["js_error"] },
+  { id: "wp", label: "WP_Error", types: ["wp_error"] },
+];
+
+const KIND_BY_TYPE = Object.fromEntries(ERROR_KINDS.flatMap((k) => k.types.map((t) => [t, k.id])));
+const KIND_LABELS = Object.fromEntries(ERROR_KINDS.map((k) => [k.id, k.label]));
+
+/** @returns {string|null} The family an event type belongs to, or null if it is not an error. */
+export function errorKind(type) {
+  return KIND_BY_TYPE[type] ?? null;
+}
+
+/** @returns {string} Human label for a family id. */
+export function errorKindLabel(id) {
+  return KIND_LABELS[id] ?? "Error";
+}
+
+/** Every event type the error engine understands. */
+export const ERROR_EVENT_TYPES = Object.keys(KIND_BY_TYPE);
+
+const isErrorEvent = (e) => KIND_BY_TYPE[e?.type] !== undefined;
 
 /**
  * Normalise an error message the same way the collector does.
@@ -98,6 +134,10 @@ export function groupErrors(events) {
       g = {
         fingerprint: fp,
         type: e.type,
+        // One family per group. Derived from the event type rather than
+        // metadata.kind so a collector that omits kind still filters correctly.
+        family: errorKind(e.type),
+        familyLabel: errorKindLabel(errorKind(e.type)),
         kind: m.kind ?? null,
         severity: m.severity ?? null,
         errorClass: m.errorClass ?? null,
@@ -112,6 +152,23 @@ export function groupErrors(events) {
         requestPath: m.requestPath ?? null,
         requestMethod: m.requestMethod ?? null,
         phpVersion: m.phpVersion ?? null,
+        // Family-specific detail. Every one of these is optional; a group
+        // simply carries the fields its family recorded.
+        status: m.status ?? null,
+        responseTimeMs: m.responseTimeMs ?? null,
+        endpoint: m.endpoint ?? null,
+        httpMethod: m.httpMethod ?? null,
+        ajaxAction: m.ajaxAction ?? null,
+        queryType: m.queryType ?? null,
+        table: m.table ?? null,
+        transport: m.transport ?? null,
+        cronHook: m.cronHook ?? null,
+        schedule: m.schedule ?? null,
+        scriptUrl: m.scriptUrl ?? null,
+        pageUrl: m.pageUrl ?? null,
+        column: m.column ?? null,
+        browser: m.browser ?? null,
+        context: m.context ?? null,
         siteId: e.siteId ?? null,
         occurrences: 0,
         firstSeen: at,
@@ -139,8 +196,68 @@ export function groupErrors(events) {
       ...g,
       repeating: g.occurrences > 1,
       componentLabel: componentLabel(g.component),
+      // The two normalised answers every card needs, computed once here so the
+      // UI never re-derives them differently from the engine.
+      whatFailed: describeFailure(g),
+      where: describeLocation(g),
     }))
     .sort((a, b) => b.lastSeen - a.lastSeen);
+}
+
+/**
+ * WHAT FAILED — one line, whatever the family.
+ *
+ * @param {object} g
+ * @returns {string}
+ */
+export function describeFailure(g) {
+  if (!g) return "Error";
+
+  switch (g.family) {
+    case "rest":
+      return `REST API ${g.status ?? "error"}${g.httpMethod ? ` on ${g.httpMethod} ${g.endpoint ?? ""}` : ""}`.trim();
+    case "ajax":
+      return `AJAX action ${g.ajaxAction ?? "unknown"} returned ${g.status ? `HTTP ${g.status}` : "an error"}`;
+    case "database":
+      return `Database error${g.queryType ? ` on ${g.queryType}` : ""}${g.table ? ` ${g.table}` : ""}`;
+    case "email":
+      return `Email delivery failed${g.transport ? ` via ${g.transport}` : ""}`;
+    case "cron":
+      return `Scheduled task ${g.cronHook ?? "unknown"} did not complete`;
+    case "javascript":
+      return "JavaScript error in the browser";
+    case "wp":
+      return `WordPress error${g.code ? ` ${g.code}` : ""}${g.context ? ` in ${g.context}` : ""}`;
+    case "http":
+      return `HTTP ${g.status ?? "error"} response`;
+    default:
+      return g.severity ?? "PHP error";
+  }
+}
+
+/**
+ * WHERE — the most specific location recorded for this family.
+ *
+ * Returns null when nothing was recorded, so the UI can say "not recorded"
+ * rather than inventing a location.
+ *
+ * @param {object} g
+ * @returns {string|null}
+ */
+export function describeLocation(g) {
+  if (!g) return null;
+
+  if (g.family === "rest" && g.endpoint) return `${g.httpMethod ?? ""} ${g.endpoint}`.trim();
+  if (g.family === "ajax" && g.ajaxAction) return `/wp-admin/admin-ajax.php?action=${g.ajaxAction}`;
+  if (g.family === "cron" && g.cronHook) return `cron hook ${g.cronHook}`;
+  if (g.family === "database" && g.table) return `table ${g.table}`;
+  if (g.family === "javascript" && g.scriptUrl) {
+    return `${g.scriptUrl}${g.line ? `:${g.line}${g.column ? `:${g.column}` : ""}` : ""}`;
+  }
+  if (g.relativePath) return `${g.relativePath}${g.line ? `:${g.line}` : ""}`;
+  if (g.endpoint) return g.endpoint;
+  if (g.requestPath) return g.requestPath;
+  return null;
 }
 
 /* --------------------------------------------------------------- correlate */
@@ -168,6 +285,34 @@ const CHANGE_EVENTS = [
   "htaccess_modified",
   "active_plugins_changed",
   "option_changed",
+  // Configuration changes: any of these can break a request without touching
+  // a single file.
+  "siteurl_changed",
+  "home_changed",
+  "smtp_setting_changed",
+  "table_changed",
+  // Cron changes, which matter most to scheduled-task failures.
+  "cron_added",
+  "cron_removed",
+  "cron_modified",
+];
+
+/**
+ * Administrative activity that can precede an error.
+ *
+ * Weaker evidence than a component change: an admin did something, in the same
+ * window. It is reported as context, never as a cause on its own, and it never
+ * names a motive — only that the activity was recorded.
+ */
+const ADMIN_ACTIVITY = [
+  "administrator_created",
+  "user_role_changed",
+  "password_reset",
+  "application_password_created",
+  "plugin_activated",
+  "plugin_deactivated",
+  "theme_activated",
+  "active_plugins_changed",
 ];
 
 /** Which component a change event is about. */
@@ -293,7 +438,56 @@ export function correlateError(group, events, opts = {}) {
     });
   }
 
-  // 5. Repeats make it a persistent condition rather than a one-off.
+  // 5. A configuration change. These break requests without touching a file,
+  //    so they are real evidence even when no component changed.
+  const CONFIG_EVENTS = ["wp_config_modified", "htaccess_modified", "siteurl_changed", "home_changed", "smtp_setting_changed", "table_changed", "option_changed"];
+  const configChange = pool.find((e) => CONFIG_EVENTS.includes(e.type));
+  if (configChange) {
+    score += 20;
+    evidence.push({
+      eventId: configChange.eventId,
+      timestamp: configChange.timestamp,
+      text: `A configuration change (${configChange.type.replace(/_/g, " ")}) was recorded ${describeGap(
+        group.firstSeen - configChange.timestamp
+      )} before the first error`,
+    });
+  }
+
+  // 6. A cron change. Weighted heavily for a scheduled-task failure, where it
+  //    is close to the whole story, and lightly otherwise.
+  const CRON_EVENTS = ["cron_added", "cron_removed", "cron_modified"];
+  const cronChange = pool.find((e) => CRON_EVENTS.includes(e.type));
+  if (cronChange) {
+    score += group.family === "cron" ? 30 : 12;
+    evidence.push({
+      eventId: cronChange.eventId,
+      timestamp: cronChange.timestamp,
+      text: `A scheduled-task change (${cronChange.type.replace(/_/g, " ")}) was recorded ${describeGap(
+        group.firstSeen - cronChange.timestamp
+      )} before the first error`,
+    });
+  }
+
+  // 7. Administrative activity in the window.
+  //
+  // Context, never a cause on its own: it is added to the score only when a
+  // component or file change already exists, and the sentence it produces
+  // names the consequence of the change, not a motive.
+  const adminActivity = (events ?? [])
+    .filter((e) => ADMIN_ACTIVITY.includes(e.type))
+    .filter((e) => e.timestamp < group.firstSeen)
+    .filter((e) => group.firstSeen - e.timestamp <= windowMs)
+    .sort((a, b) => b.timestamp - a.timestamp)[0];
+  if (adminActivity && (componentChange || fileChange)) {
+    score += 8;
+    evidence.push({
+      eventId: adminActivity.eventId,
+      timestamp: adminActivity.timestamp,
+      text: `Administrative activity (${adminActivity.type.replace(/_/g, " ")}) was recorded in the same window`,
+    });
+  }
+
+  // 8. Repeats make it a persistent condition rather than a one-off.
   if (group.occurrences > 1) {
     evidence.push({
       eventId: group.eventIds[0] ?? null,
@@ -304,29 +498,49 @@ export function correlateError(group, events, opts = {}) {
     });
   }
 
-  if (!componentChange && !fileChange) {
+  // The change the cause sentence is actually about, whichever scored.
+  const causeEvent = componentChange ?? fileChange ?? (group.family === "cron" ? cronChange : null) ?? configChange ?? cronChange ?? null;
+
+  // "Strong" means a change to the component or file that is failing, or a
+  // cron change for a cron failure. Anything else is a related change in the
+  // window and is labelled as such rather than promoted to a cause.
+  const strong = Boolean(componentChange || fileChange || (cronChange && group.family === "cron"));
+
+  if (!causeEvent) {
     return {
       likelyCause: null,
+      causeStrength: "none",
       confidence: 0,
       confidenceLabel: "Uncertain",
       evidence,
-      explanation: `No recorded change in the ${componentLabel(
+      firstSeenAfter: null,
+      explanation: `No recorded change to the ${componentLabel(
         group.component
-      ).toLowerCase()} that owns ${group.relativePath ?? "the failing file"} falls within ${windowMinutes} minutes before the first occurrence. ScanSite will not name a cause the events do not support.`,
+      ).toLowerCase()} that owns ${group.where ?? group.relativePath ?? "the failing component"} falls within ${windowMinutes} minutes before the first occurrence. ScanSite will not name a cause the events do not support.`,
     };
   }
 
   const confidence = Math.min(95, score);
   return {
-    likelyCause: buildCauseLabel(group, componentChange, fileChange),
+    likelyCause: strong
+      ? buildCauseLabel(group, componentChange, fileChange, cronChange)
+      : "Related change detected",
+    causeStrength: strong ? "strong" : "weak",
     confidence,
     confidenceLabel: confidenceLabel(confidence),
     evidence,
+    // How long after the cited change the error first appeared. This is the
+    // "first seen 4 minutes after plugin update" figure on the card.
+    firstSeenAfter: {
+      gap: group.firstSeen - causeEvent.timestamp,
+      change: causeEvent.type,
+      eventId: causeEvent.eventId,
+    },
     explanation: null,
   };
 }
 
-function buildCauseLabel(group, componentChange, fileChange) {
+function buildCauseLabel(group, componentChange, fileChange, cronChange = null) {
   const name = group.componentName ?? group.componentSlug ?? componentLabel(group.component);
 
   if (componentChange) {
@@ -343,6 +557,10 @@ function buildCauseLabel(group, componentChange, fileChange) {
 
   if (fileChange) {
     return `A change to ${group.relativePath ?? "the failing file"} may have introduced this error`;
+  }
+
+  if (cronChange) {
+    return `A scheduled-task change may have introduced this error`;
   }
 
   return `A change in ${name} may have introduced this error`;
@@ -442,7 +660,14 @@ export function buildErrorFixSteps(group) {
     });
   }
 
-  if (group.component === "plugin" || group.component === "theme") {
+  // Family-specific guidance comes next, so "check first" is the most specific
+  // thing the evidence supports rather than generic advice.
+  steps.push(...familyFixSteps(group));
+
+  // Only for PHP errors: the undefined-method/function reasoning below is what
+  // makes a version mismatch the likely explanation, and it does not transfer
+  // to a refused REST request or a failed query.
+  if ((group.component === "plugin" || group.component === "theme") && (!group.family || group.family === "php")) {
     steps.push({
       id: "check-compatibility",
       title: `Check PHP ${group.phpVersion ?? ""} and WordPress compatibility for ${group.componentName ?? "this component"}`.replace(
@@ -474,4 +699,170 @@ export function buildErrorFixSteps(group) {
 function truncate(s, n) {
   const t = String(s ?? "");
   return t.length > n ? `${t.slice(0, n)}…` : t;
+}
+
+/**
+ * Family-specific steps, inserted before the generic tail.
+ *
+ * Each one is conditional on evidence actually being present: an email step
+ * about the transport only appears when a transport was recorded, a database
+ * step about the table only when a table was recorded. No padding.
+ *
+ * @param {object} group
+ * @returns {Array}
+ */
+function familyFixSteps(group) {
+  const ev = { eventId: group.eventIds?.[0] ?? null };
+
+  switch (group.family) {
+    case "rest":
+      return [
+        {
+          id: "check-rest-route",
+          title: `Check the ${group.httpMethod ?? ""} ${group.endpoint ?? "REST"} route`.trim(),
+          why:
+            Number(group.status) === 403 || Number(group.status) === 401
+              ? "A 401/403 means the request was refused, which is usually a permission callback or an expired credential rather than broken code"
+              : "This route returned an error status, so the handler itself is where to look",
+          evidence: ev,
+        },
+        {
+          id: "check-rest-code",
+          title: `Look up the error code ${group.code ?? "recorded"}`,
+          why: "WordPress error codes name the subsystem that refused the request, which narrows the search before reading any code",
+          evidence: ev,
+        },
+      ];
+
+    case "ajax":
+      return [
+        {
+          id: "check-ajax-action",
+          title: `Find the handler for the "${group.ajaxAction ?? "unknown"}" action`,
+          why: "The action name maps to a wp_ajax_ hook, which identifies the code that answered the request",
+          evidence: ev,
+        },
+        {
+          id: "check-ajax-nonce",
+          title: "Check the nonce and capability the action requires",
+          why: "Most admin-ajax failures are a failed nonce or capability check rather than an exception",
+          evidence: ev,
+        },
+      ];
+
+    case "database":
+      return [
+        {
+          id: "check-db-table",
+          title: `Inspect the ${group.table ?? "recorded"} table`,
+          why: `${group.queryType ?? "The"} statement failed, so the table structure or its contents are the first thing to verify`,
+          evidence: ev,
+        },
+        {
+          id: "check-db-repair",
+          title: "Run a table repair and check the error log",
+          why: "A corrupt or missing table produces this error repeatedly until it is repaired",
+          evidence: ev,
+        },
+      ];
+
+    case "email":
+      return [
+        {
+          id: "check-mail-transport",
+          title: `Check the ${group.transport ?? "mail"} transport`,
+          why: "The recorded transport is what actually failed, so its credentials and reachability come first",
+          evidence: ev,
+        },
+        {
+          id: "check-mail-provider",
+          title: "Confirm the mail provider accepted the connection",
+          why: "Most wp_mail failures are a refused connection or a rejected login, not a message problem",
+          evidence: ev,
+        },
+      ];
+
+    case "cron":
+      return [
+        {
+          id: "check-cron-hook",
+          title: `Run the ${group.cronHook ?? "scheduled"} hook manually`,
+          why: "Running it directly shows the failure immediately instead of waiting for the next schedule",
+          evidence: ev,
+        },
+        {
+          id: "check-cron-schedule",
+          title: `Check the ${group.schedule ?? "recorded"} schedule is still registered`,
+          why: "A hook that is no longer scheduled, or was rescheduled, stops completing",
+          evidence: ev,
+        },
+      ];
+
+    case "javascript":
+      return [
+        {
+          id: "check-js-script",
+          title: `Open ${group.scriptUrl ?? "the reported script"}${group.line ? ` at line ${group.line}` : ""}`,
+          why: "The browser reported the script and line, which is enough to find the failing statement",
+          evidence: ev,
+        },
+        {
+          id: "check-js-cache",
+          title: "Check for a stale cached asset after the last deploy",
+          why: "A browser running an old bundle against new markup is the most common source of sudden client-side errors",
+          evidence: ev,
+        },
+      ];
+
+    case "http":
+      return [
+        {
+          id: "check-http-route",
+          title: `Request ${group.requestPath ?? "the recorded path"} directly`,
+          why: `The server returned HTTP ${group.status ?? "an error"} on this path, so it can be reproduced on demand`,
+          evidence: ev,
+        },
+      ];
+
+    case "wp":
+      return [
+        {
+          id: "check-wp-error",
+          title: `Trace the ${group.code ?? "recorded"} error code`,
+          why: `${group.context ? `It was raised in ${group.context}, which` : "It"} names the subsystem that produced the WP_Error`,
+          evidence: ev,
+        },
+      ];
+
+    default:
+      return [];
+  }
+}
+
+/**
+ * The normalised answer set every error can give.
+ *
+ * This is the shape the UI renders, so a card never has to know which family
+ * it is showing: the same eight questions get the same eight fields.
+ *
+ * @param {object} group A correlated group from buildErrorEvidence().
+ * @returns {object}
+ */
+export function buildErrorAnswers(group) {
+  if (!group) return null;
+
+  const corr = group.correlation ?? correlateError(group, []);
+  const steps = buildErrorFixSteps(group);
+
+  return {
+    whatFailed: group.whatFailed ?? describeFailure(group),
+    where: group.where ?? describeLocation(group),
+    when: { firstSeen: group.firstSeen, lastSeen: group.lastSeen },
+    howOften: group.occurrences,
+    whichComponent: group.componentName ?? group.componentLabel,
+    whatChanged: corr.likelyCause,
+    changeStrength: corr.causeStrength ?? (corr.likelyCause ? "weak" : "none"),
+    evidence: corr.evidence ?? [],
+    checkFirst: steps[0]?.title ?? null,
+  };
 }

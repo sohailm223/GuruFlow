@@ -1,9 +1,9 @@
 {
-  "eventId": "evt_7b246102eeb5be61",
+  "eventId": "evt_fa4d5db971b3fcf2",
   "siteId": "site_example000000",
   "category": "file",
   "type": "executable_created",
-  "timestamp": 1788178063000,
+  "timestamp": 1788199258000,
   "severityHint": null,
   "actor": {
     "userId": 1,
@@ -23,11 +23,11 @@
     "bytes": 68,
     "permissions": "0666"
   },
-  "receivedAt": 1788178063407,
+  "receivedAt": 1788199258098,
   "riskScore": 77,
   "riskBand": "high",
   "incident": {
-    "id": "inc_7f7f5015f172",
+    "id": "inc_6888994503e5",
     "title": "Suspicious executable after privilege escalation",
     "severity": "critical",
     "riskScore": 100,

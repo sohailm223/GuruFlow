@@ -43,6 +43,32 @@ class ScanSite_BB_Error_Capture {
 	 * notices are deliberately excluded: they are not failures, and reporting
 	 * them would bury the errors that matter.
 	 */
+	/**
+	 * Statuses worth recording as an error in their own right.
+	 *
+	 * Client errors are included because a 403 on an API route is usually a
+	 * permission callback or an expired credential, which is exactly the kind of
+	 * thing that starts failing after an update.
+	 *
+	 * @var int[]
+	 */
+	const HTTP_ERROR_STATUSES = array( 400, 401, 403, 404, 429, 500, 502, 503, 504 );
+
+	/** @var array|null The error this request failed with, if any. */
+	private static $last_error = null;
+
+	/**
+	 * The error captured so far in this request.
+	 *
+	 * Exposed so a later sweep can tell the request failed even when the failure
+	 * came through the exception handler, which leaves error_get_last() empty.
+	 *
+	 * @return array|null
+	 */
+	public static function last_error() {
+		return self::$last_error;
+	}
+
 	const FATAL_TYPES = array(
 		E_ERROR,
 		E_PARSE,
@@ -152,22 +178,68 @@ class ScanSite_BB_Error_Capture {
 		}
 
 		$status = (int) http_response_code();
-		if ( $status < 500 || $status > 599 ) {
+		if ( ! in_array( $status, self::HTTP_ERROR_STATUSES, true ) ) {
 			return;
 		}
 
-		self::record(
+		self::submit(
+			'http_error',
 			array(
-				'errorClass' => null,
-				'kind'       => 'http',
-				'severity'   => 'HTTP ' . $status,
-				'message'    => 'Server returned HTTP ' . $status,
-				'file'       => null,
-				'line'       => null,
-				'code'       => (string) $status,
-			),
-			'http_error'
+				'kind'     => 'http',
+				'severity' => 'HTTP ' . $status,
+				'message'  => 'Server returned HTTP ' . $status,
+				'code'     => (string) $status,
+				// Group by status + route, never by the full URL: query strings
+				// carry nonces, and numeric ids would split one route into
+				// thousands of one-off "errors".
+				'fpKey'    => $status . '|' . self::normalise_route( self::request_path() ),
+				'extra'    => array(
+					'status'         => $status,
+					'responseTimeMs' => self::response_time_ms(),
+				),
+			)
 		);
+	}
+
+	/**
+	 * Collapse the volatile parts of a route so one endpoint groups together.
+	 *
+	 * /wp-json/wc/v3/orders/1234 and /wp-json/wc/v3/orders/5678 are the same
+	 * endpoint failing, not two unrelated errors.
+	 *
+	 * @param string|null $path
+	 * @return string
+	 */
+	public static function normalise_route( $path ) {
+		$p = (string) $path;
+
+		// UUIDs first. Once the digits are masked a UUID no longer matches its
+		// own pattern, so every distinct id would group separately -- the exact
+		// split this method exists to prevent.
+		$p = preg_replace( '/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i', '#uuid', $p );
+
+		// Then mask id segments. The lookbehind leaves an API version such as
+		// /v3/ intact: v3 and v4 are different endpoints, and collapsing them
+		// would hide which one is failing.
+		$p = preg_replace( '/(?<![a-z])\d+/', '#', $p );
+
+		return $p;
+	}
+
+	/**
+	 * Milliseconds since the request started, when the server provides it.
+	 *
+	 * Reported only as a duration. Nothing about the response body is read.
+	 *
+	 * @return int|null
+	 */
+	private static function response_time_ms() {
+		$start = isset( $_SERVER['REQUEST_TIME_FLOAT'] ) ? (float) $_SERVER['REQUEST_TIME_FLOAT'] : 0.0;
+		if ( $start <= 0 ) {
+			return null;
+		}
+		$ms = ( microtime( true ) - $start ) * 1000;
+		return $ms > 0 ? (int) round( $ms ) : null;
 	}
 
 	/* -------------------------------------------------------------- record */
@@ -184,6 +256,53 @@ class ScanSite_BB_Error_Capture {
 	 * @param string $type  Event type.
 	 */
 	private static function record( $error, $type = 'php_error' ) {
+		// Remember what this request failed with. An uncaught exception is
+		// handled by set_exception_handler and never reaches error_get_last(),
+		// so a later sweep cannot rely on that alone to know a failure happened.
+		self::$last_error = $error;
+
+		self::submit(
+			$type,
+			array(
+				'kind'       => $error['kind'],
+				'severity'   => $error['severity'],
+				'errorClass' => $error['errorClass'],
+				'code'       => $error['code'],
+				'message'    => $error['message'],
+				'file'       => $error['file'],
+				'line'       => $error['line'],
+			)
+		);
+	}
+
+	/**
+	 * Queue one error event of any kind.
+	 *
+	 * Every error family -- PHP, HTTP, REST, AJAX, database, mail, cron,
+	 * JavaScript -- funnels through here so they all share one throttle, one
+	 * fingerprint scheme and one queue. Nothing in this method performs a
+	 * network request.
+	 *
+	 * @param string $type Event type, e.g. php_error, rest_error, db_error.
+	 * @param array  $args {
+	 *     @type string      $kind       Family id.
+	 *     @type string|null $severity   Human label, e.g. "Fatal error".
+	 *     @type string|null $message    Sanitised message.
+	 *     @type string|null $code       Error or status code.
+	 *     @type string|null $errorClass Exception class, when there is one.
+	 *     @type string|null $file       Absolute file, when the error has one.
+	 *     @type int|null    $line       Line number, when the error has one.
+	 *     @type array|null  $component  Pre-resolved component from attribute().
+	 *     @type string|null $fpKey      Explicit grouping key. Without it the
+	 *                                     legacy message-based fingerprint is
+	 *                                     used, so PHP behaviour is unchanged.
+	 *     @type array|null  $extra      Extra scalar metadata. Values that are
+	 *                                     not scalar are dropped rather than
+	 *                                     serialised, so an object holding
+	 *                                     private data can never be leaked.
+	 * }
+	 */
+	public static function submit( $type, $args ) {
 		if ( ! function_exists( 'get_option' ) || ! class_exists( 'ScanSite_BB_Events' ) ) {
 			return;
 		}
@@ -194,11 +313,23 @@ class ScanSite_BB_Error_Capture {
 			return;
 		}
 
-		$component = self::attribute( $error['file'] );
-		$fp        = self::fingerprint( $error['severity'], $error['message'], $component['relativePath'], $error['line'] );
-		$now       = time();
+		// A caller that already knows the component (a REST route owned by a
+		// plugin, say) says so; otherwise it is derived from the failing file.
+		$component = isset( $args['component'] ) && is_array( $args['component'] )
+			? $args['component']
+			: self::attribute( isset( $args['file'] ) ? $args['file'] : null );
 
-		$state  = get_option( self::OPT_STATE, array() );
+		$severity = isset( $args['severity'] ) ? $args['severity'] : null;
+		$message  = isset( $args['message'] ) ? $args['message'] : '';
+		$line     = isset( $args['line'] ) ? $args['line'] : null;
+
+		$fp = isset( $args['fpKey'] ) && '' !== $args['fpKey']
+			? substr( md5( $type . '|' . $args['fpKey'] ), 0, 24 )
+			: self::fingerprint( $severity, $message, $component['relativePath'], $line );
+
+		$now = time();
+
+		$state = get_option( self::OPT_STATE, array() );
 		if ( ! is_array( $state ) ) {
 			$state = array();
 		}
@@ -224,40 +355,44 @@ class ScanSite_BB_Error_Capture {
 			return;
 		}
 
-		$occurrences             = (int) $entry['count'] - (int) $entry['reportedCount'];
-		$entry['reportedAt']     = $now;
-		$entry['reportedCount']  = (int) $entry['count'];
-		$state[ $fp ]            = $entry;
+		$occurrences            = (int) $entry['count'] - (int) $entry['reportedCount'];
+		$entry['reportedAt']    = $now;
+		$entry['reportedCount'] = (int) $entry['count'];
+		$state[ $fp ]           = $entry;
 		self::save_state( $state, $now );
 
-		$events = new ScanSite_BB_Events();
-		$events->enqueue(
-			$type,
-			'error',
-			array(
-				'metadata' => array(
-					'fingerprint'    => $fp,
-					'kind'           => $error['kind'],
-					'severity'       => $error['severity'],
-					'errorClass'     => $error['errorClass'],
-					'code'           => $error['code'],
-					'message'        => self::truncate( $error['message'], 500 ),
-					'file'           => $component['absolute'],
-					'relativePath'   => $component['relativePath'],
-					'line'           => null === $error['line'] ? null : (int) $error['line'],
-					'component'      => $component['component'],
-					'componentSlug'  => $component['slug'],
-					'componentName'  => $component['name'],
-					'occurrences'    => max( 1, $occurrences ),
-					'totalSeen'      => (int) $entry['count'],
-					'firstSeen'      => (int) $entry['first'],
-					'lastSeen'       => (int) $entry['last'],
-					'requestPath'    => self::request_path(),
-					'requestMethod'  => self::request_method(),
-					'phpVersion'     => PHP_VERSION,
-				),
-			)
+		$metadata = array(
+			'fingerprint'   => $fp,
+			'kind'          => isset( $args['kind'] ) ? $args['kind'] : null,
+			'severity'      => $severity,
+			'errorClass'    => isset( $args['errorClass'] ) ? $args['errorClass'] : null,
+			'code'          => isset( $args['code'] ) ? $args['code'] : null,
+			'message'       => self::truncate( $message, 500 ),
+			'file'          => $component['absolute'],
+			'relativePath'  => $component['relativePath'],
+			'line'          => null === $line ? null : (int) $line,
+			'component'     => $component['component'],
+			'componentSlug' => $component['slug'],
+			'componentName' => $component['name'],
+			'occurrences'   => max( 1, $occurrences ),
+			'totalSeen'     => (int) $entry['count'],
+			'firstSeen'     => (int) $entry['first'],
+			'lastSeen'      => (int) $entry['last'],
+			'requestPath'   => self::request_path(),
+			'requestMethod' => self::request_method(),
+			'phpVersion'    => PHP_VERSION,
 		);
+
+		// Family-specific detail. Scalars and null only, so nothing structured
+		// can smuggle a nested value past the sanitiser.
+		foreach ( (array) ( isset( $args['extra'] ) ? $args['extra'] : array() ) as $k => $v ) {
+			if ( is_scalar( $v ) || null === $v ) {
+				$metadata[ $k ] = $v;
+			}
+		}
+
+		$events = new ScanSite_BB_Events();
+		$events->enqueue( $type, 'error', array( 'metadata' => $metadata ) );
 	}
 
 	/** Persist the rolling counters, bounded so a long-lived site cannot grow this forever. */

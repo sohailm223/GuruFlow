@@ -17,7 +17,7 @@
     {
       "name": "Pairing code accepted by ScanSite",
       "pass": true,
-      "detail": "siteId=site_aac74b"
+      "detail": "siteId=site_6daad1"
     },
     {
       "name": "Collector key stored in WordPress",
@@ -47,12 +47,12 @@
     {
       "name": "Connection screen renders",
       "pass": true,
-      "detail": "8522 bytes of HTML"
+      "detail": "8391 bytes of HTML"
     },
     {
       "name": "Heartbeat reaches ScanSite",
       "pass": true,
-      "detail": "lastSeenAt 1788183688057 -> 1788183688829"
+      "detail": "lastSeenAt 1788199185936 -> 1788199186598"
     },
     {
       "name": "Heartbeat reports real versions",
@@ -165,7 +165,7 @@
       "detected": "Yes",
       "payloadCorrect": "Yes",
       "duplicates": "No",
-      "notes": "username=test_admin role=administrator userId=18"
+      "notes": "username=test_admin role=administrator userId=8"
     },
     {
       "event": "logout",
@@ -213,7 +213,7 @@
       "detected": "Yes",
       "payloadCorrect": "Yes",
       "duplicates": "No",
-      "notes": "hook=lab_test_hook schedule=hourly nextRun=2026-08-31T14:41:38+00:00"
+      "notes": "hook=lab_test_hook schedule=hourly nextRun=2026-08-31T18:59:53+00:00"
     },
     {
       "event": "cron_removed",
@@ -229,7 +229,7 @@
       "detected": "Yes",
       "payloadCorrect": "Yes",
       "duplicates": "No",
-      "notes": "path=/.htaccess sha256=e4cd6935efd6… contents sent=no"
+      "notes": "path=/.htaccess sha256=4874f51af42d… contents sent=no"
     },
     {
       "event": "wp_config_modified",
@@ -237,7 +237,7 @@
       "detected": "Yes",
       "payloadCorrect": "Yes",
       "duplicates": "No",
-      "notes": "sha256=944d5220f741… secrets sent=no"
+      "notes": "sha256=4bebf2a0c7a5… secrets sent=no"
     },
     {
       "event": "executable_created",
@@ -333,6 +333,41 @@
       "detected": "Yes",
       "payloadCorrect": "Yes",
       "notes": "Fatal error in wp-content/plugins/scansite-error-probe/scansite-error-probe.php:9"
+    },
+    {
+      "event": "rest_error",
+      "tested": "Yes",
+      "detected": "Yes",
+      "payloadCorrect": "Yes",
+      "notes": "403 POST /scansite-probe/v1/orders rest_forbidden"
+    },
+    {
+      "event": "mail_error",
+      "tested": "Yes",
+      "detected": "Yes",
+      "payloadCorrect": "Yes",
+      "notes": "wp_mail_failed via mail:localhost"
+    },
+    {
+      "event": "db_error",
+      "tested": "Yes",
+      "detected": "Yes",
+      "payloadCorrect": "Yes",
+      "notes": "SELECT on wp_missing_table_xyz"
+    },
+    {
+      "event": "ajax_error",
+      "tested": "Partial",
+      "detected": "Partial",
+      "payloadCorrect": "Yes",
+      "notes": "attribution + action-name sanitising verified; the HTTP status gate is not reachable under php-wasm"
+    },
+    {
+      "event": "cron_error",
+      "tested": "Yes",
+      "detected": "Yes",
+      "payloadCorrect": "Yes",
+      "notes": "hook scansite_probe_boom schedule hourly"
     }
   ],
   "queue": [
@@ -459,12 +494,12 @@
     {
       "name": "Event capture is local and fast (no network)",
       "pass": true,
-      "detail": "3 ms to enqueue"
+      "detail": "2 ms to enqueue"
     },
     {
       "name": "admin_init file hashing stays cheap",
       "pass": true,
-      "detail": "107 ms"
+      "detail": "85 ms"
     },
     {
       "name": "No secret-like keys or values in real payloads",
@@ -489,12 +524,12 @@
     {
       "name": "Timestamps are ISO 8601 UTC",
       "pass": true,
-      "detail": "2026-08-31T13:42:58+00:00"
+      "detail": "2026-08-31T18:00:56+00:00"
     },
     {
       "name": "Server stores UTC (offset +00:00)",
       "pass": true,
-      "detail": "2026-08-31T13:42:58+00:00"
+      "detail": "2026-08-31T18:00:56+00:00"
     },
     {
       "name": "eventId is unique",
@@ -576,11 +611,11 @@
   "performance": [
     {
       "name": "wp_insert_user with collector active",
-      "ms": 139
+      "ms": 135
     },
     {
       "name": "admin_init (config + uploads hashing)",
-      "ms": 107
+      "ms": 85
     },
     {
       "name": "update_option with collector active",
@@ -588,7 +623,7 @@
     },
     {
       "name": "enqueue one event (no network)",
-      "ms": 3
+      "ms": 2
     }
   ],
   "bugs": [],
@@ -704,7 +739,7 @@
     {
       "name": "Capture is gated on a connected website",
       "pass": true,
-      "detail": "siteId=site_aac74b"
+      "detail": "siteId=site_6daad1"
     },
     {
       "name": "A real PHP error is captured",
@@ -759,7 +794,7 @@
     {
       "name": "First/last seen are recorded",
       "pass": true,
-      "detail": "first=1788183782 last=1788183782"
+      "detail": "first=1788199259 last=1788199259"
     },
     {
       "name": "The actor is recorded when available",
@@ -869,7 +904,7 @@
     {
       "name": "First seen stays at the original occurrence",
       "pass": true,
-      "detail": "first=1788183784 last=1788183784"
+      "detail": "first=1788199260 last=1788199261"
     },
     {
       "name": "The total keeps climbing across reports",
@@ -955,6 +990,352 @@
       "name": "The delivered event keeps the fingerprint",
       "pass": true,
       "detail": "fingerprint=c67e57f13d17095fcda287e9"
+    }
+  ],
+  "signals": [
+    {
+      "name": "The signals class loads inside WordPress",
+      "pass": true,
+      "detail": "class_exists=true"
+    },
+    {
+      "name": "rest_post_dispatch is hooked",
+      "pass": true,
+      "detail": "yes"
+    },
+    {
+      "name": "wp_mail_failed is hooked",
+      "pass": true,
+      "detail": "yes"
+    },
+    {
+      "name": "The shutdown sweep is hooked",
+      "pass": true,
+      "detail": "yes"
+    },
+    {
+      "name": "The cron watcher is hooked",
+      "pass": true,
+      "detail": "yes"
+    },
+    {
+      "name": "A refused REST request is captured",
+      "pass": true,
+      "detail": "queued=1"
+    },
+    {
+      "name": "Capture performs no network request",
+      "pass": true,
+      "detail": "outbound=0"
+    },
+    {
+      "name": "The endpoint is recorded",
+      "pass": true,
+      "detail": "/scansite-probe/v1/orders"
+    },
+    {
+      "name": "The HTTP method is recorded",
+      "pass": true,
+      "detail": "POST"
+    },
+    {
+      "name": "The status is recorded",
+      "pass": true,
+      "detail": "status=403"
+    },
+    {
+      "name": "The WP_Error code is recorded",
+      "pass": true,
+      "detail": "rest_forbidden"
+    },
+    {
+      "name": "The message is sanitised and present",
+      "pass": true,
+      "detail": "Sorry, you are not allowed to do that."
+    },
+    {
+      "name": "The owning plugin is resolved from the route callback",
+      "pass": true,
+      "detail": "plugin/scansite-signal-probe"
+    },
+    {
+      "name": "The plugin display name is resolved",
+      "pass": true,
+      "detail": "ScanSite Signal Probe"
+    },
+    {
+      "name": "The request body is never sent",
+      "pass": true
+    },
+    {
+      "name": "The allowed route really did answer",
+      "pass": true,
+      "detail": "{\"ok\":true}"
+    },
+    {
+      "name": "A successful REST call records nothing",
+      "pass": true,
+      "detail": "queued=0"
+    },
+    {
+      "name": "wp_mail really did fail",
+      "pass": true,
+      "detail": "sent=false"
+    },
+    {
+      "name": "A real wp_mail failure is captured",
+      "pass": true,
+      "detail": "queued=1 sent=false"
+    },
+    {
+      "name": "The error code is recorded",
+      "pass": true,
+      "detail": "wp_mail_failed"
+    },
+    {
+      "name": "The transport is recorded",
+      "pass": true,
+      "detail": "mail:localhost"
+    },
+    {
+      "name": "The email body is never sent",
+      "pass": true
+    },
+    {
+      "name": "The subject is never sent",
+      "pass": true
+    },
+    {
+      "name": "The recipient is never sent",
+      "pass": true,
+      "detail": "[{\"eventId\":\"evt_da6a2a12fb7e8c35\",\"schemaVersion\":1,\"site\":\"site_6daad1\",\"category\":\"error\",\"type\":\"mail_error\",\"timestamp\":\"2026-08-31T18:01:03+00:00\",\"actor\""
+    },
+    {
+      "name": "A card number in the body is never sent",
+      "pass": true
+    },
+    {
+      "name": "No SMTP credential is sent",
+      "pass": true
+    },
+    {
+      "name": "The query really did fail",
+      "pass": true,
+      "detail": "ezsql=1"
+    },
+    {
+      "name": "A real database error is captured by the shutdown sweep",
+      "pass": true,
+      "detail": "queued=1 ezsql=1"
+    },
+    {
+      "name": "The query type is recorded",
+      "pass": true,
+      "detail": "queryType=SELECT"
+    },
+    {
+      "name": "The table name is recorded",
+      "pass": true,
+      "detail": "table=wp_missing_table_xyz"
+    },
+    {
+      "name": "The complete SQL statement is never sent",
+      "pass": true,
+      "detail": "[{\"eventId\":\"evt_9f799d55c241b7b7\",\"schemaVersion\":1,\"site\":\"site_6daad1\",\"category\":\"error\",\"type\":\"db_error\",\"timestamp\":\"2026-08-31T18:01:04+00:00\",\"actor\":{\"userId\":1,\"username\":\"labadmin\",\"role\":"
+    },
+    {
+      "name": "No SELECT keyword survives in the message",
+      "pass": true,
+      "detail": "  MySQL query: [query redacted][query redacted][query redacted]"
+    },
+    {
+      "name": "No private value survives",
+      "pass": true
+    },
+    {
+      "name": "No database credential is sent",
+      "pass": true,
+      "detail": "[{\"eventId\":\"evt_9f799d55c241b7b7\",\"schemaVersion\":1,\"site\":\"site_6daad1\",\"category\":\"error\",\"type\":\"db_error\",\"timestamp\":\"2026-08-31T18:01:04+00:00\",\"actor\":{\"userId\":1,\"username\":\"labadmin\",\"role\":"
+    },
+    {
+      "name": "describe_query reads a SELECT",
+      "pass": true,
+      "detail": "{\"type\":\"SELECT\",\"table\":\"wp_posts\"}"
+    },
+    {
+      "name": "describe_query reads an UPDATE",
+      "pass": true,
+      "detail": "{\"type\":\"UPDATE\",\"table\":\"wp_options\"}"
+    },
+    {
+      "name": "describe_query reads an INSERT",
+      "pass": true,
+      "detail": "{\"type\":\"INSERT\",\"table\":\"wp_postmeta\"}"
+    },
+    {
+      "name": "describe_query reads a DROP",
+      "pass": true,
+      "detail": "{\"type\":\"DROP\",\"table\":\"wp_links\"}"
+    },
+    {
+      "name": "describe_query reports nothing for a non-query",
+      "pass": true,
+      "detail": "{\"type\":null,\"table\":null}"
+    },
+    {
+      "name": "strip_sql removes an embedded statement",
+      "pass": true,
+      "detail": "Failed running [query redacted]"
+    },
+    {
+      "name": "The AJAX context was entered",
+      "pass": true,
+      "detail": "wp_doing_ajax=true"
+    },
+    {
+      "name": "The action is attributed to the plugin that registered it",
+      "pass": true,
+      "detail": "plugin/scansite-signal-probe"
+    },
+    {
+      "name": "The plugin display name is resolved for the action",
+      "pass": true,
+      "detail": "name=ScanSite Signal Probe"
+    },
+    {
+      "name": "An admin-ajax request that did not fail records nothing",
+      "pass": true,
+      "detail": "statusVisible=200 queued=0"
+    },
+    {
+      "name": "No posted form field is sent",
+      "pass": true,
+      "detail": "{\"ajaxContext\":true,\"statusVisible\":200,\"owner\":{\"component\":\"plugin\",\"slug\":\"scansite-signal-probe\",\"name\":\"ScanSite Signal Probe\",\"absolute\":\"/home/user/GuruF"
+    },
+    {
+      "name": "The action name is reduced to safe characters",
+      "pass": true,
+      "detail": "evilscriptalert1scriptactionDROPTABLEx--"
+    },
+    {
+      "name": "The cron hook is captured while it runs",
+      "pass": true,
+      "detail": "{\"hook\":\"scansite_probe_cleanup\",\"schedule\":\"twicedaily\",\"args\":1}"
+    },
+    {
+      "name": "The schedule is resolved from the real cron array",
+      "pass": true,
+      "detail": "schedule=twicedaily"
+    },
+    {
+      "name": "The argument count is recorded, not the arguments",
+      "pass": true,
+      "detail": "args=1"
+    },
+    {
+      "name": "An unscheduled hook reports no schedule rather than guessing",
+      "pass": true,
+      "detail": "{\"hook\":\"a_hook_that_is_not_scheduled\",\"schedule\":null,\"args\":0}"
+    },
+    {
+      "name": "The watcher attaches a listener to a scheduled hook",
+      "pass": true,
+      "detail": "doingCron=true listener=yes"
+    },
+    {
+      "name": "A scheduled task that fatals is captured as cron_error",
+      "pass": true,
+      "detail": "queued=1"
+    },
+    {
+      "name": "The failing hook name is recorded",
+      "pass": true,
+      "detail": "hook=scansite_probe_boom"
+    },
+    {
+      "name": "The schedule is recorded with the failure",
+      "pass": true,
+      "detail": "schedule=hourly"
+    },
+    {
+      "name": "The fatal that stopped it is recorded",
+      "pass": true,
+      "detail": "Call to undefined method ScanSiteSignalProbe::method_that_does_not_exist()"
+    },
+    {
+      "name": "A cron failure is grouped by hook, not by message",
+      "pass": true,
+      "detail": "fp=47a2e87074426d37cccfd031"
+    },
+    {
+      "name": "Two failing numeric ids are one route",
+      "pass": true,
+      "detail": "/wp-json/wc/v3/orders/# === /wp-json/wc/v3/orders/#"
+    },
+    {
+      "name": "Two failing UUIDs are one route",
+      "pass": true,
+      "detail": "/wp-json/wc/v3/orders/#uuid === /wp-json/wc/v3/orders/#uuid"
+    },
+    {
+      "name": "A UUID route is not mistaken for a numeric one",
+      "pass": true,
+      "detail": "/wp-json/wc/v3/orders/#uuid vs /wp-json/wc/v3/orders/#"
+    },
+    {
+      "name": "An API version is kept distinct from another version",
+      "pass": true,
+      "detail": "/wp-json/wc/v4/orders/# vs /wp-json/wc/v3/orders/#"
+    },
+    {
+      "name": "A route with no id is left alone",
+      "pass": true,
+      "detail": "/checkout/"
+    },
+    {
+      "name": "An email address is redacted",
+      "pass": true,
+      "detail": "Failed for #email while paying"
+    },
+    {
+      "name": "A long digit run is redacted",
+      "pass": true,
+      "detail": "Card # declined"
+    },
+    {
+      "name": "A quoted literal is redacted",
+      "pass": true,
+      "detail": "Undefined index '?'"
+    },
+    {
+      "name": "Markup is stripped and entities decoded",
+      "pass": true,
+      "detail": "Bad thing & more"
+    },
+    {
+      "name": "An embedded SQL statement is removed",
+      "pass": true,
+      "detail": "WordPress database error for query [query redacted]"
+    },
+    {
+      "name": "A message is capped in length",
+      "pass": true,
+      "detail": "len=300"
+    },
+    {
+      "name": "Six identical mail failures queue one event",
+      "pass": true,
+      "detail": "queued=1"
+    },
+    {
+      "name": "The error leaves the queue on flush",
+      "pass": true,
+      "detail": "still queued=0"
+    },
+    {
+      "name": "The connection is healthy after delivering an error",
+      "pass": true,
+      "detail": "connected"
     }
   ]
 }

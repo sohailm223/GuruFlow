@@ -22,6 +22,7 @@ define( 'SCANSITE_BB_DIR', plugin_dir_path( __FILE__ ) );
 require_once SCANSITE_BB_DIR . 'includes/class-signing.php';
 require_once SCANSITE_BB_DIR . 'includes/class-connection.php';
 require_once SCANSITE_BB_DIR . 'includes/class-error-capture.php';
+require_once SCANSITE_BB_DIR . 'includes/class-error-signals.php';
 require_once SCANSITE_BB_DIR . 'includes/class-file-integrity.php';
 require_once SCANSITE_BB_DIR . 'includes/class-events.php';
 require_once SCANSITE_BB_DIR . 'includes/class-collector.php';
@@ -38,6 +39,7 @@ require_once SCANSITE_BB_DIR . 'includes/class-admin.php';
  * early costs nothing on a healthy request.
  */
 ScanSite_BB_Error_Capture::register();
+ScanSite_BB_Error_Signals::register();
 
 /**
  * Boot the collector.

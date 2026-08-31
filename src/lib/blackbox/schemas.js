@@ -137,9 +137,18 @@ export const EVENT_TYPES = [
   "ssl_renewed",
   "ssl_invalid",
 
-  // error evidence (collector: fatal errors, uncaught exceptions, HTTP 5xx)
+  // error evidence. One type per family; the collector emits those it has a
+  // hook for, and the engine understands all of them so an event of any family
+  // is grouped and rendered rather than dropped.
   "php_error",
   "http_error",
+  "rest_error",
+  "ajax_error",
+  "db_error",
+  "mail_error",
+  "cron_error",
+  "js_error",
+  "wp_error",
 
   // collector self-test
   "collector_test",
@@ -195,7 +204,32 @@ export function resolveType(rawType) {
   return LEGACY_TYPE_ALIASES[t] ?? (EVENT_TYPES.includes(t) ? t : null);
 }
 
+/**
+ * Category for every error event type, by full type name.
+ *
+ * Checked before the head-prefix map below. Matching on the head alone files
+ * db_error as a file event, mail_error as smtp and cron_error as cron — three
+ * families silently leaving the error category, which is exactly how an event
+ * ends up invisible on the /errors page while still counting everywhere else.
+ */
+const ERROR_TYPE_CATEGORY = Object.fromEntries(
+  [
+    "php_error",
+    "http_error",
+    "rest_error",
+    "ajax_error",
+    "db_error",
+    "mail_error",
+    "cron_error",
+    "js_error",
+    "wp_error",
+  ].map((t) => [t, "error"])
+);
+
 export function categoryForType(type) {
+  const exact = ERROR_TYPE_CATEGORY[type];
+  if (exact) return exact;
+
   const head = String(type).split("_")[0];
   const map = {
     wordpress: "core",
@@ -528,6 +562,51 @@ export function describeEvent(e) {
       const m = e.metadata ?? {};
       const n = m.occurrences > 1 ? ` (${m.occurrences} occurrences)` : "";
       return `${m.severity ?? "HTTP 5xx"} on ${m.requestPath ?? "an unknown path"}${n}`;
+    }
+
+    case "rest_error": {
+      const m = e.metadata ?? {};
+      const n = m.occurrences > 1 ? ` (${m.occurrences} occurrences)` : "";
+      const route = [m.httpMethod, m.endpoint].filter(Boolean).join(" ") || "an unknown route";
+      return `REST ${m.status ?? "error"} on ${route}${m.code ? ` [${m.code}]` : ""}${n}`;
+    }
+
+    case "ajax_error": {
+      const m = e.metadata ?? {};
+      const n = m.occurrences > 1 ? ` (${m.occurrences} occurrences)` : "";
+      return `admin-ajax action ${m.ajaxAction ?? "unknown"} returned ${m.status ? `HTTP ${m.status}` : "an error"}${n}`;
+    }
+
+    case "db_error": {
+      const m = e.metadata ?? {};
+      const n = m.occurrences > 1 ? ` (${m.occurrences} occurrences)` : "";
+      const shape = [m.queryType, m.table].filter(Boolean).join(" ");
+      return `Database error${shape ? ` on ${shape}` : ""}: ${m.message ?? "no message"}${n}`;
+    }
+
+    case "mail_error": {
+      const m = e.metadata ?? {};
+      const n = m.occurrences > 1 ? ` (${m.occurrences} occurrences)` : "";
+      return `Email delivery failed${m.code ? ` [${m.code}]` : ""}${m.transport ? ` via ${m.transport}` : ""}${n}`;
+    }
+
+    case "cron_error": {
+      const m = e.metadata ?? {};
+      const n = m.occurrences > 1 ? ` (${m.occurrences} occurrences)` : "";
+      return `Scheduled task ${m.cronHook ?? "unknown"} failed${m.schedule ? ` (${m.schedule})` : ""}${n}`;
+    }
+
+    case "js_error": {
+      const m = e.metadata ?? {};
+      const n = m.occurrences > 1 ? ` (${m.occurrences} occurrences)` : "";
+      const at = m.scriptUrl ? `${m.scriptUrl}${m.line ? `:${m.line}` : ""}` : "an unknown script";
+      return `JavaScript error in ${at}: ${m.message ?? "no message"}${n}`;
+    }
+
+    case "wp_error": {
+      const m = e.metadata ?? {};
+      const n = m.occurrences > 1 ? ` (${m.occurrences} occurrences)` : "";
+      return `WordPress error${m.code ? ` [${m.code}]` : ""}${m.context ? ` in ${m.context}` : ""}${n}`;
     }
 
     case "collector_test":

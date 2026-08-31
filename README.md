@@ -162,7 +162,54 @@ LAN address, tunnel or staging URL instead.
 
 `core` · `plugin` · `theme` · `file` · `db` · `user` · `cron` · `config`
 (`.htaccess`, `wp-config.php`) · `redirect` · `auth` · `smtp` · `error`
-(PHP fatals and uncaught exceptions, plus HTTP 5xx responses)
+
+The `error` category covers nine event types, one per family:
+
+| Family | Event type | Captured | What the collector records |
+| --- | --- | --- | --- |
+| PHP | `php_error` | ✅ | message, file + line, severity, component, occurrences |
+| REST | `rest_error` | ✅ | endpoint, method, status, `WP_Error` code, owning component |
+| Email | `mail_error` | ✅ | `WP_Error` code and transport label |
+| Database | `db_error` | ✅ | query **type** and table name only |
+| Cron | `cron_error` | ✅ | hook name, schedule, the fatal that stopped it |
+| HTTP | `http_error` | ⚠️ | status, normalised route, method, response time |
+| AJAX | `ajax_error` | ⚠️ | `admin-ajax` action name, status, owning component |
+| JavaScript | `js_error` | ❌ | *(handler written, nothing reports to it yet)* |
+| WP_Error | `wp_error` | ❌ | *(no separate capture path — see below)* |
+
+Five families are captured end to end and verified in the real-WordPress lab.
+The other four are stated plainly rather than presented as working:
+
+- **HTTP** and **AJAX** both capture, but both are gated on
+  `http_response_code()` returning an error status, and php-wasm cannot set a
+  response status at all — `http_response_code(500)` and `status_header(503)`
+  both leave it reading 200, so neither path can be driven in the lab. Neither
+  has a lab assertion that it fires. What *is* verified is the work around the
+  gate: route normalisation and grouping for HTTP, and plugin attribution and
+  action-name sanitising for AJAX.
+- **JavaScript** has a complete handler (`record_js_error`) that sanitises the
+  message, script URL, line, column, page URL and browser family, but nothing
+  calls it. It needs a browser-side reporter posting to a route, which has not
+  been written. The family filter and card rendering are in place, so a
+  `js_error` that arrives is handled correctly — no such event can arrive yet.
+- **WP_Error** has no separate capture path. WordPress raises no global hook
+  when a `WP_Error` is constructed, so there is nothing to attach to. `WP_Error`
+  evidence is captured where it actually surfaces instead: a refused REST
+  request records its code as `rest_error`, and a failed `wp_mail` records its
+  code as `mail_error`. The type remains in the taxonomy for a future explicit
+  source.
+
+Every message passes through `sanitize_text()`, which strips markup, decodes
+entities, removes any embedded SQL statement, and redacts emails and long digit
+runs. For database errors the collector never sends the statement itself — only
+a keyword from an allow-list and the table name — because `wpdb::print_error()`
+stores an HTML debug block that quotes the failing query, and on a shop that
+query contains the row it was looking for. For email it never sends the body,
+subject, headers or recipients.
+
+The `/errors` page groups these by fingerprint and filters by family. Each card
+answers: what failed, where, when, how often, which component, what changed
+before it, and what to check first.
 
 `dns` and `ssl` remain in the schema but are **not monitored by the collector
 yet** — the UI labels them as such rather than showing fake results. They are
@@ -341,11 +388,12 @@ node tests/blackbox/api.mjs           # API contract, hardening, lifecycle, trus
 node tests/blackbox/scenarios.mjs     # detector + grouping/correlation calibration
 node tests/blackbox/dashboard.mjs     # overview priority, website table, event explorer filters, dev diagnostics
 node tests/blackbox/remediation.mjs   # likely entry point, guided fix plan, verification round trip
-node tests/blackbox/errors.mjs        # error grouping, component attribution, correlation, fix steps
+node tests/blackbox/errors.mjs        # PHP error grouping, attribution, correlation, fix steps
+node tests/blackbox/error-families.mjs # the eight other families, the /errors filters, per-family fix steps
 node tests/blackbox/production-render.mjs   # dev vs production render of the incident page (two servers)
 ```
 
-Five of the six `tests/blackbox` suites need a running server on
+Six of the seven `tests/blackbox` suites need a running server on
 `127.0.0.1:3000` (`SCANSITE_URL` overrides) and the admin credentials from the
 environment. They create and then delete their own sites.
 
@@ -382,12 +430,13 @@ node run-all.mjs            # needs the ScanSite dev server on 127.0.0.1:3000
 lab always tests current source. `wp/`, `wp-sqlite/` and `node_modules/` are
 gitignored — they are large and reproducible.
 
-It covers connection and pairing, 28 real event types through a live
+It covers connection and pairing, 33 real event types through a live
 `wp_insert_user` / `wp_schedule_event` / file write, queue and retry behaviour,
 the admin screen, secret-leak scanning of real payloads, a final benign
 multi-event scenario that must land as one incident with evidence pointing at
-real event IDs, and PHP error capture. Current result: 28/28 event types
-validated, 0 bugs.
+real event IDs, PHP error capture, and the five other error families the
+collector emits. Current result: 32/33 event types fully validated, 0 bugs —
+the one that is only partly verified is explained under `t-error-signals.mjs`.
 
 `t-errors.mjs` raises genuine PHP fatals from a real plugin file and asserts on
 what the collector actually queued: the message, absolute and relative path,
@@ -396,6 +445,31 @@ fingerprint grouping, and that a crash loop is counted rather than duplicated.
 It also intercepts every outbound HTTP request in the process that dies to
 prove capture never calls the network, and confirms delivery still happens
 through the ordinary WP-Cron flush. 52 checks.
+
+`t-error-signals.mjs` does the same for the other families. It writes a
+throwaway probe plugin that owns a REST route and an `admin-ajax` action, then
+drives real WordPress code paths rather than hand-built payloads:
+`WP_REST_Server::serve_request()`, a `wp_mail()` that genuinely fails, a
+`$wpdb->query()` against a table that does not exist, and a scheduled task whose
+callback really fatals. It asserts the captured metadata, and asserts the
+privacy rules by absence — no SQL statement, no email body, subject or
+recipient, no posted form field, no credential-shaped token in any queued
+event. 70 checks.
+
+Two things it cannot prove, stated plainly rather than papered over:
+
+- `ajax_error` is only **partly** verified, and the matrix records it as
+  `Partial` rather than claiming it. Plugin attribution for an `admin-ajax`
+  action and the action-name sanitiser are both tested against the real
+  handler, but the capture path is gated on `http_response_code() >= 400` and
+  php-wasm treats `http_response_code()` as a no-op that always returns 200, so
+  the status gate is untested. The test asserts the negative direction only: a
+  request that did not fail records nothing.
+- `http_error` has no lab assertion at all, for the same reason. Route
+  normalisation is tested directly; the capture gate is not.
+
+`js_error` and `wp_error` are not in the matrix, because neither can be
+produced by the collector yet — see the family table above.
 
 It authenticates with `SCANSITE_ADMIN_USER` / `SCANSITE_ADMIN_PASSWORD` and
 removes the lab website both before and after the run — the dashboard's Recent

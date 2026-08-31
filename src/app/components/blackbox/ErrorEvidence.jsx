@@ -28,6 +28,74 @@ export default function ErrorEvidence({ incident }) {
   );
 }
 
+/**
+ * The extra detail rows a family recorded.
+ *
+ * Rendered only when the collector actually sent the field, so a database
+ * error does not show an empty "Endpoint" row and a REST error does not show an
+ * empty "Table" row. A missing field is a missing field, not a blank.
+ *
+ * @param {object} group
+ */
+function FamilyFields({ group: g }) {
+  const rows = [];
+
+  if (g.endpoint) rows.push(["Endpoint", `${g.httpMethod ? `${g.httpMethod} ` : ""}${g.endpoint}`]);
+  if (g.status && g.family !== "http") rows.push(["Status", `HTTP ${g.status}`]);
+  if (g.ajaxAction) rows.push(["AJAX action", g.ajaxAction]);
+  if (g.queryType) rows.push(["Query type", g.queryType]);
+  if (g.table) rows.push(["Table", g.table]);
+  if (g.transport) rows.push(["Mail transport", g.transport]);
+  if (g.cronHook) rows.push(["Cron hook", g.cronHook]);
+  if (g.schedule) rows.push(["Schedule", g.schedule]);
+  if (g.scriptUrl) rows.push(["Script", `${g.scriptUrl}${g.column ? `:${g.line}:${g.column}` : g.line ? `:${g.line}` : ""}`]);
+  if (g.pageUrl) rows.push(["Page", g.pageUrl]);
+  if (g.browser) rows.push(["Browser", g.browser]);
+  if (g.context) rows.push(["Context", g.context]);
+  if (g.responseTimeMs != null) rows.push(["Response time", `${g.responseTimeMs} ms`]);
+
+  if (!rows.length) return null;
+
+  return rows.map(([label, value]) => (
+    <Field key={label} label={label}>
+      <span className="break-all font-mono text-xs text-slate-800">{value}</span>
+    </Field>
+  ));
+}
+
+/**
+ * Card heading per family.
+ *
+ * "PHP Fatal Error" is the wording the error suite asserts on, so the PHP
+ * family keeps it exactly. Every other family gets its own label rather than
+ * borrowing PHP's, because a refused REST request is not a fatal.
+ *
+ * @param {object} g
+ * @returns {string}
+ */
+function headingFor(g) {
+  switch (g.family) {
+    case "http":
+      return "HTTP Error Response";
+    case "rest":
+      return "REST API Error";
+    case "ajax":
+      return "AJAX Error";
+    case "database":
+      return "Database Error";
+    case "email":
+      return "Email Delivery Error";
+    case "cron":
+      return "Scheduled Task Error";
+    case "javascript":
+      return "JavaScript Error";
+    case "wp":
+      return "WordPress Error";
+    default:
+      return "PHP Fatal Error";
+  }
+}
+
 function ErrorCard({ group: g, incidentId }) {
   const corr = g.correlation;
 
@@ -37,7 +105,7 @@ function ErrorCard({ group: g, incidentId }) {
         <div className="flex items-center gap-2">
           <OctagonAlert className="h-4 w-4 text-rose-600" />
           <h2 className="text-sm font-semibold uppercase tracking-wide text-rose-700">
-            {g.type === "http_error" ? "HTTP 5xx Response" : "PHP Fatal Error"}
+            {headingFor(g)}
           </h2>
         </div>
         {g.repeating ? (
@@ -95,6 +163,8 @@ function ErrorCard({ group: g, incidentId }) {
             </span>
           </Field>
         ) : null}
+
+        <FamilyFields group={g} />
       </dl>
 
       <div className="border-t border-rose-200 bg-white/60 px-5 py-4">
