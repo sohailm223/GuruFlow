@@ -32,6 +32,8 @@ import {
 import { recommendationsFor } from "./recommendations";
 import { describeEvent } from "./schemas";
 import { groupIntoIncidents } from "./grouping";
+import { classifyEntryPoint } from "./entrypoint";
+import { buildRemediationPlan, buildPrevention } from "./remediation";
 
 export function newIncidentId() {
   return `inc_${crypto.randomBytes(6).toString("hex")}`;
@@ -71,6 +73,28 @@ export function analyzeIncident(events, opts = {}) {
     ? Math.round((sorted[sorted.length - 1].timestamp - sorted[0].timestamp) / 60_000)
     : 0;
 
+  const eventRefs = sorted.map((e) => ({
+    eventId: e.eventId,
+    timestamp: e.timestamp,
+    category: e.category,
+    type: e.type,
+    text: describeEvent(e),
+    path: e.path ?? e.target?.path,
+    target: e.target,
+    changes: e.changes,
+    count: e.count,
+    actor: e.actor,
+    severityHint: e.severityHint,
+    metadata: e.metadata,
+    score: scoreEvent(e).score,
+  }));
+
+  // Likely infection path + remediation plan are derived from the same stored
+  // events, so the guidance can never drift from the evidence shown.
+  const entryPoint = classifyEntryPoint(eventRefs, { knownIps: opts.knownIps ?? null });
+  const remediation = buildRemediationPlan({ events: eventRefs, entryPoint });
+  const prevention = buildPrevention({ events: eventRefs, entryPoint });
+
   const confidence = confidenceFor({
     findings,
     evidenceCount: top?.evidence?.length ?? 0,
@@ -97,6 +121,11 @@ export function analyzeIncident(events, opts = {}) {
     severityLabel,
     confidence,
     confidenceLabel: confidenceLabel(confidence),
+
+    // Likely infection path, prioritised fix plan and prevention advice.
+    entryPoint,
+    remediation,
+    prevention,
 
     title: top?.title ?? "Routine site activity",
     summary: top?.summary ?? "No suspicious pattern detected in this window.",
@@ -127,21 +156,7 @@ export function analyzeIncident(events, opts = {}) {
 
     eventCount: sorted.length,
     categories: [...new Set(sorted.map((e) => e.category))].sort(),
-    events: sorted.map((e) => ({
-      eventId: e.eventId,
-      timestamp: e.timestamp,
-      category: e.category,
-      type: e.type,
-      text: describeEvent(e),
-      path: e.path ?? e.target?.path,
-      target: e.target,
-      changes: e.changes,
-      count: e.count,
-      actor: e.actor,
-      severityHint: e.severityHint,
-      metadata: e.metadata,
-      score: scoreEvent(e).score,
-    })),
+    events: eventRefs,
 
     analyzedAt: Date.now(),
   };

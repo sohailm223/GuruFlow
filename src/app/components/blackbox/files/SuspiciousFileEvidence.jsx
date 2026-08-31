@@ -45,12 +45,21 @@ export default async function SuspiciousFileEvidence({ incident }) {
               {(file.signals ?? []).slice(0, 3).length > 0 && (
                 <p className="mt-1 text-xs text-slate-500">{(file.signals ?? []).slice(0, 3).join(" · ")}</p>
               )}
-              <Link
-                href={`/websites/${incident.siteId}/files/${file.id}`}
-                className="mt-3 inline-block rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800"
-              >
-                Inspect File
-              </Link>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Link
+                  href={`/websites/${incident.siteId}/files/${file.id}`}
+                  className="inline-block rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800"
+                >
+                  Inspect File
+                </Link>
+                {/* Guidance only — this scrolls to the fix steps and changes nothing. */}
+                <a
+                  href="#how-to-fix"
+                  className="inline-block rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  How to Fix
+                </a>
+              </div>
             </div>
           );
         })}

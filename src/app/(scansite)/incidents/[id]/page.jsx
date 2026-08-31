@@ -6,16 +6,32 @@ import LikelyCause from "@/app/components/blackbox/LikelyCause";
 import AttackChain from "@/app/components/blackbox/AttackChain";
 import ImpactSummary from "@/app/components/blackbox/ImpactSummary";
 import EvidenceList from "@/app/components/blackbox/EvidenceList";
-import RecommendedActions from "@/app/components/blackbox/RecommendedActions";
 import IncidentTimeline from "@/app/components/blackbox/IncidentTimeline";
 import DetectorFindings from "@/app/components/blackbox/DetectorFindings";
 import DevDiagnostics from "@/app/components/blackbox/DevDiagnostics";
 import IncidentStatusControl from "@/app/components/blackbox/IncidentStatusControl";
 import SuspiciousFileEvidence from "@/app/components/blackbox/files/SuspiciousFileEvidence";
+import EntryPointPanel from "@/app/components/blackbox/EntryPointPanel";
+import AffectedAreas from "@/app/components/blackbox/AffectedAreas";
+import HowToFix from "@/app/components/blackbox/HowToFix";
+import VerifyRepair from "@/app/components/blackbox/VerifyRepair";
+import PreventAgain from "@/app/components/blackbox/PreventAgain";
 import { formatClock, formatDay } from "@/lib/blackbox/schemas";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * Incident detail.
+ *
+ * Structured as the five questions a non-security person actually asks:
+ *   1 What happened            — verdict, chain, evidence
+ *   2 How it probably happened — likely entry point, hedged
+ *   3 What was affected        — including what is unknown or unmonitored
+ *   4 How to fix it            — prioritised, guided, and verified afterwards
+ *   5 How to prevent it again  — hardening
+ *
+ * Nothing on this page modifies the customer website.
+ */
 export default async function IncidentDetailPage({ params }) {
   const { id } = await params;
 
@@ -25,7 +41,7 @@ export default async function IncidentDetailPage({ params }) {
   const site = await getSiteById(incident.siteId);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3">
           <Link href="/incidents" className="text-sm text-slate-500 hover:text-slate-800">
@@ -58,14 +74,37 @@ export default async function IncidentDetailPage({ params }) {
         />
       </div>
 
-      <LikelyCause incident={incident} />
-      <SuspiciousFileEvidence incident={incident} />
-      <AttackChain incident={incident} />
-      <ImpactSummary incident={incident} />
-      <EvidenceList incident={incident} />
-      <RecommendedActions incident={incident} />
-      <IncidentTimeline incident={incident} />
-      <DetectorFindings incident={incident} />
+      {/* 1 ── WHAT HAPPENED */}
+      <Section n={1} title="What Happened">
+        <LikelyCause incident={incident} />
+        <SuspiciousFileEvidence incident={incident} />
+        <AttackChain incident={incident} />
+        <IncidentTimeline incident={incident} />
+        <EvidenceList incident={incident} />
+        <DetectorFindings incident={incident} />
+      </Section>
+
+      {/* 2 ── HOW IT PROBABLY HAPPENED */}
+      <Section n={2} title="How It Probably Happened" note="A probable path, not a proven one.">
+        <EntryPointPanel incident={incident} />
+      </Section>
+
+      {/* 3 ── WHAT WAS AFFECTED */}
+      <Section n={3} title="What Was Affected">
+        <ImpactSummary incident={incident} />
+        <AffectedAreas incident={incident} />
+      </Section>
+
+      {/* 4 ── HOW TO FIX IT */}
+      <Section n={4} title="How to Fix It" note="ScanSite guides the fix; it never applies it." id="how-to-fix">
+        <HowToFix incident={incident} siteId={incident.siteId} />
+        <VerifyRepair incidentId={incident.id} initial={incident.verification ?? null} />
+      </Section>
+
+      {/* 5 ── HOW TO PREVENT IT AGAIN */}
+      <Section n={5} title="How to Prevent It Again">
+        <PreventAgain incident={incident} />
+      </Section>
 
       {/* Diagnostics are for development only: they expose the internal
           grouping, scoring and detector numbers behind the verdict. */}
@@ -75,6 +114,21 @@ export default async function IncidentDetailPage({ params }) {
         Analysis is deterministic — produced by ScanSite&apos;s detectors, not an
         AI service. Raw internal score {incident.rawScore}.
       </p>
+    </div>
+  );
+}
+
+function Section({ n, title, note, id, children }) {
+  return (
+    <div id={id}>
+      <div className="mb-3 flex flex-wrap items-baseline gap-3">
+        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white">
+          {n}
+        </span>
+        <h2 className="text-base font-semibold uppercase tracking-wide text-slate-700">{title}</h2>
+        {note && <p className="text-xs text-slate-400">{note}</p>}
+      </div>
+      <div className="space-y-6">{children}</div>
     </div>
   );
 }

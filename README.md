@@ -287,11 +287,18 @@ node tests/wordpress-lab/lint.mjs     # real PHP 8.0–8.4 syntax check of the c
 node tests/blackbox/api.mjs           # API contract, hardening, lifecycle, trusted files, file integrity, terminology
 node tests/blackbox/scenarios.mjs     # detector + grouping/correlation calibration
 node tests/blackbox/dashboard.mjs     # overview priority, website table, event explorer filters, dev diagnostics
+node tests/blackbox/remediation.mjs   # likely entry point, guided fix plan, verification round trip
 ```
 
-The three `tests/blackbox` suites need a running server on `127.0.0.1:3000`
+The four `tests/blackbox` suites need a running server on `127.0.0.1:3000`
 (`SCANSITE_URL` overrides) and the admin credentials from the environment.
 They create and then delete their own sites.
+
+`remediation.mjs` is the only suite with a unit half: it imports
+`classifyEntryPoint` and the remediation helpers straight from `src/lib/blackbox`,
+so wording, ordering and confidence regressions fail even when the live half is
+skipped. Its live half starts a throwaway HTTP origin so the website-availability
+check has a real HTTP 200 to find.
 
 `dashboard.mjs` expects a **development** server, because it asserts the
 diagnostics panel is present; to confirm the panel is absent from a production
