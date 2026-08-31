@@ -169,6 +169,30 @@ const scenarios = [
       { eventId: 's2', type: 'administrator_created', category: 'user', timestamp: new Date(t).toISOString(), actor: { username: 'bob', role: 'administrator', ip: '203.0.113.77' }, target: { username: 'bob' }, changes: { to: 'administrator' } },
     ],
   },
+  {
+    name: 'Same file path links different actors',
+    expectTitle: 'Unexpected executable in uploads',
+    // Two executables inside one correlated incident score higher than a single
+    // one would on its own: measured CRITICAL 100.
+    expectBand: 'CRITICAL',
+    expectCount: 1,
+    build: (t) => [
+      { eventId: 'f1', type: 'executable_created', category: 'file', timestamp: new Date(t - 45 * MINUTE).toISOString(), actor: { username: 'alice', ip: '198.51.100.10' }, path: '/wp-content/uploads/cache/x1.php', target: { name: 'x1.php', path: '/wp-content/uploads/cache/x1.php' }, metadata: { extension: '.php' } },
+      { eventId: 'f2', type: 'executable_created', category: 'file', timestamp: new Date(t).toISOString(), actor: { username: 'bob', ip: '203.0.113.77' }, path: '/wp-content/uploads/cache/x1.php', target: { name: 'x1.php', path: '/wp-content/uploads/cache/x1.php' }, metadata: { extension: '.php' } },
+    ],
+  },
+  {
+    name: 'Same session links different actors and IPs',
+    expectTitle: 'Unexpected administrator account',
+    // Correlating two administrator creations through one session is more
+    // serious than a lone creation (which scores MEDIUM 53): measured CRITICAL 80.
+    expectBand: 'CRITICAL',
+    expectCount: 1,
+    build: (t) => [
+      { eventId: 'k1', type: 'administrator_created', category: 'user', timestamp: new Date(t - 45 * MINUTE).toISOString(), actor: { username: 'carol', role: 'administrator', ip: '198.51.100.31', session: 'sess_9f2a' }, target: { username: 'carol' }, changes: { to: 'administrator' } },
+      { eventId: 'k2', type: 'administrator_created', category: 'user', timestamp: new Date(t).toISOString(), actor: { username: 'dave', role: 'administrator', ip: '203.0.113.90', session: 'sess_9f2a' }, target: { username: 'dave' }, changes: { to: 'administrator' } },
+    ],
+  },
 ];
 
 /* ------------------------------------------------------------------ run */

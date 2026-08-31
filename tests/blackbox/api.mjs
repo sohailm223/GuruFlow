@@ -322,6 +322,13 @@ const fpWithReason = inc
   : { status: 0 };
 check('False positive with a reason accepted', fpWithReason.status === 200 && fpWithReason.body?.incident?.falsePositiveReason === 'Known plugin/theme behaviour', `got ${fpWithReason.status}`);
 
+// A reason recorded for an earlier verdict must not justify a later one.
+await call('PATCH', `/api/blackbox/incidents/${inc.id}`, { status: 'confirmed' });
+const secondFp = await call('PATCH', `/api/blackbox/incidents/${inc.id}`, { status: 'false_positive' });
+check('Second false positive needs a fresh reason', secondFp.status === 400, `got ${secondFp.status}`);
+const afterLeave = await call('GET', `/api/blackbox/incidents/${inc.id}`);
+check('Stale false-positive reason cleared when leaving that status', afterLeave.body?.incident?.falsePositiveReason === null, String(afterLeave.body?.incident?.falsePositiveReason));
+
 /* ---------------------------------------------------------- audit log */
 const anonAudit = await fetch(BASE + '/api/blackbox/audit');
 check('Audit log requires a session', anonAudit.status === 401, `got ${anonAudit.status}`);
@@ -352,6 +359,33 @@ check('Collector endpoints still work under the limit', afterMany.status === 200
 // Remove the throwaway site, otherwise every run leaves another
 // "API Suite" entry cluttering the dashboard.
 await call('DELETE', `/api/blackbox/sites/${siteId}?purge=true`);
+
+/* ---------------------------------------------------------- logout */
+console.log('\nLogout');
+const logoutRes = await fetch(BASE + '/api/blackbox/logout', { method: 'POST', headers: { Cookie: ADMIN_COOKIE } });
+const cleared = (logoutRes.headers.getSetCookie?.() ?? []).find((c) => c.startsWith('scansite_session='));
+check('Logout clears the session cookie', logoutRes.status === 200 && /Max-Age=0|expires=Thu, 01 Jan 1970/i.test(cleared ?? ''), String(cleared).slice(0, 80));
+
+// The session is a stateless HMAC cookie, so logout cannot revoke the token
+// itself: a client that keeps sending the old value still verifies. Logout
+// clears the cookie (so a browser stops sending it) and writes the audit entry.
+// Revoking tokens server-side would need a store reachable from the Edge
+// middleware; that is out of scope for the single-instance local build.
+const stillValid = await call('GET', '/api/blackbox/sites');
+check('Old token still verifies (stateless session, documented limitation)', stillValid.status === 200, `got ${stillValid.status}`);
+
+const auditAfterLogout = await call('GET', '/api/blackbox/audit?limit=20');
+check('Logout is recorded in the audit log', (auditAfterLogout.body?.entries ?? []).some((e) => e.action === 'logout'), 'no logout entry');
+
+{
+  const back = await fetch(BASE + '/api/blackbox/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: ADMIN_USER, password: ADMIN_PASS }),
+  });
+  const c = (back.headers.getSetCookie?.() ?? []).find((s) => s.startsWith('scansite_session='));
+  if (c) ADMIN_COOKIE = c.split(';')[0];
+}
 
 /* ------------------------------------------- opt-in: HTTP 429 proof
  * These two prove the limits over the wire. They are opt-in because both are

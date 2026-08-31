@@ -59,12 +59,19 @@ export async function PATCH(req, { params }) {
     patch.statusNote = note.slice(0, 500);
   }
 
-  // A false positive should carry a reason so the decision is auditable.
-  if (nextStatus === "false_positive" && typeof body.falsePositiveReason === "string" && body.falsePositiveReason.trim()) {
-    patch.falsePositiveReason = body.falsePositiveReason.trim().slice(0, 500);
-  }
-  if (nextStatus === "false_positive" && changingStatus && !patch.falsePositiveReason && !existing.falsePositiveReason) {
-    return fail(400, "A reason is required before marking an incident as a false positive");
+  // A false positive must carry a reason for THIS verdict. A reason recorded
+  // for an earlier verdict does not carry over — the incident may have been
+  // confirmed and dismissed again for a completely different reason.
+  if (changingStatus && nextStatus === "false_positive") {
+    const reason = typeof body.falsePositiveReason === "string" ? body.falsePositiveReason.trim() : "";
+    if (!reason) {
+      return fail(400, "A reason is required before marking an incident as a false positive");
+    }
+    patch.falsePositiveReason = reason.slice(0, 500);
+  } else if (changingStatus && existing.falsePositiveReason) {
+    // Leaving false_positive: drop the stale reason so it cannot be mistaken
+    // for the justification of whatever comes next. The audit log keeps it.
+    patch.falsePositiveReason = null;
   }
 
   const incident = await updateIncident(id, patch);

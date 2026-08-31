@@ -8,10 +8,11 @@ export const dynamic = "force-dynamic";
 const ACTION_LABEL = {
   login: "Admin signed in",
   login_failed: "Failed sign-in attempt",
+  logout: "Admin signed out",
   site_added: "Website added",
   site_deleted: "Website deleted",
-  site_disconnected: "Website disconnected",
-  site_reconnected: "Website reconnected",
+  disconnect: "Website disconnected",
+  reconnect: "Website reconnected",
   key_rotation_requested: "Collector key rotation requested",
   key_rotation: "Collector key rotated",
   incident_status: "Incident status changed",

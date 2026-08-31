@@ -6,7 +6,7 @@
  * and derives the analytics, levels and incident correlations shown in the UI.
  */
 
-import { upsertFile, addFileEventRef, updateSite, findTrusted, expireTrusted } from "../storage";
+import { upsertFile, addFileEventRef, updateSite, findTrusted, expireTrusted, recordAudit } from "../storage";
 
 /** 0–100 risk → human level, kept separate from incident severity. */
 export function levelFor(risk) {
@@ -63,6 +63,14 @@ export async function recordFileEvidence(siteId, events) {
           await expireTrusted(trusted.id);
           record.trusted = false;
           record.trustedExpired = true;
+          // A trust entry dying because the hash moved is exactly the kind of
+          // change an operator needs to see later.
+          await recordAudit({
+            action: "trusted_file_expired",
+            siteId,
+            path: file.relativePath,
+            reason: "SHA-256 changed since the file was trusted",
+          });
         }
       }
 

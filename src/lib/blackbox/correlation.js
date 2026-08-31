@@ -12,10 +12,17 @@ export function correlationKeys(e) {
   if (e.actor?.ip) keys.push(`ip:${e.actor.ip}`);
   if (e.actor?.userId) keys.push(`user:${e.actor.userId}`);
   if (e.actor?.username) keys.push(`actor:${e.actor.username}`);
+  if (e.actor?.session) keys.push(`session:${e.actor.session}`);
   if (e.target?.plugin) keys.push(`plugin:${e.target.plugin}`);
   if (e.target?.theme) keys.push(`theme:${e.target.theme}`);
   if (e.target?.username) keys.push(`account:${e.target.username}`);
   if (e.target?.hook) keys.push(`hook:${e.target.hook}`);
+
+  // The touched file: two events writing the same path are the same story even
+  // when nothing else about them matches.
+  const path = e.path ?? e.target?.path ?? e.metadata?.file?.relativePath;
+  if (typeof path === "string" && path) keys.push(`path:${path.replace(/^\/+/, "")}`);
+
   return keys;
 }
 

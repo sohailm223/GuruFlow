@@ -56,29 +56,42 @@ export default async function FileInspectPage({ params }) {
         <p className="mt-2 text-sm leading-relaxed text-slate-600">{whyFlagged(file)}</p>
       </section>
 
-      {/* Detection signals */}
-      {(file.signals ?? []).length > 0 && (
-        <section className="rounded-xl border border-slate-200 bg-white p-5">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-700">Detection signals</h2>
-          <ul className="mt-3 space-y-2">
-            {(file.codeFindings ?? []).map((f, i) => (
-              <li key={f.id ?? i} className="flex items-start gap-3 text-sm">
-                <SevDot severity={f.severity} />
-                <span className="text-slate-700">
-                  <span className="font-medium">{f.label}</span>
-                  <span className="ml-2 font-mono text-xs text-slate-400">line {f.startLine}{f.endLine !== f.startLine ? `–${f.endLine}` : ""}</span>
-                </span>
+      {/* Detection signals — always shown, even when the collector reported no
+          code-level signals, because the integrity signals still explain the
+          risk. An empty state is honest; a missing section is not. */}
+      <section className="rounded-xl border border-slate-200 bg-white p-5">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-700">Detection signals</h2>
+        <ul className="mt-3 space-y-2">
+          {(file.codeFindings ?? []).map((f, i) => (
+            <li key={f.id ?? i} className="flex items-start gap-3 text-sm">
+              <SevDot severity={f.severity} />
+              <span className="text-slate-700">
+                <span className="font-medium">{f.label}</span>
+                <span className="ml-2 font-mono text-xs text-slate-400">line {f.startLine}{f.endLine !== f.startLine ? `–${f.endLine}` : ""}</span>
+              </span>
+            </li>
+          ))}
+          {(file.signals ?? []).filter((s) => !(file.codeFindings ?? []).some((f) => f.label === s)).map((s) => (
+            <li key={s} className="flex items-start gap-3 text-sm">
+              <SevDot severity="medium" />
+              <span className="text-slate-700">{s}</span>
+            </li>
+          ))}
+          {integritySignals(file).map((s) => (
+            <li key={s.text} className="flex items-start gap-3 text-sm">
+              <SevDot severity={s.severity} />
+              <span className="text-slate-700">{s.text}</span>
+            </li>
+          ))}
+          {(file.codeFindings ?? []).length === 0 &&
+            (file.signals ?? []).length === 0 &&
+            integritySignals(file).length === 0 && (
+              <li className="text-sm text-slate-500">
+                No code-level signals were reported for this file — integrity metadata only.
               </li>
-            ))}
-            {(file.signals ?? []).filter((s) => !(file.codeFindings ?? []).some((f) => f.label === s)).map((s) => (
-              <li key={s} className="flex items-start gap-3 text-sm">
-                <SevDot severity="medium" />
-                <span className="text-slate-700">{s}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+            )}
+        </ul>
+      </section>
 
       {/* Suspicious code with line-level evidence */}
       <section>
@@ -197,6 +210,34 @@ export default async function FileInspectPage({ params }) {
       </section>
     </div>
   );
+}
+
+/**
+ * Signals derivable from integrity metadata alone, so the section still
+ * explains the risk when the collector reported no code-level findings.
+ */
+function integritySignals(file) {
+  const out = [];
+  if (file.category === "uploads" && file.extension === "php") {
+    out.push({ severity: "critical", text: "Executable extension inside a data-only directory (uploads)" });
+  }
+  if (file.integrityStatus === "critical" || file.integrityStatus === "suspicious") {
+    out.push({ severity: "high", text: `Integrity status: ${STATUS_LABEL[file.integrityStatus] ?? file.integrityStatus}` });
+  } else if (file.integrityStatus) {
+    out.push({ severity: "low", text: `Integrity status: ${STATUS_LABEL[file.integrityStatus] ?? file.integrityStatus}` });
+  }
+  if (file.integrityStatus === "new") {
+    out.push({ severity: "medium", text: "New since the integrity baseline" });
+  }
+  if (file.previousSha256) {
+    out.push({ severity: "medium", text: "SHA-256 changed since this file was last seen" });
+  }
+  if (file.trustedExpired) {
+    out.push({ severity: "high", text: "Was trusted — trust expired because the hash changed" });
+  } else if (file.trusted) {
+    out.push({ severity: "low", text: "Matches a trusted path + SHA-256 entry" });
+  }
+  return out;
 }
 
 function whyFlagged(file) {

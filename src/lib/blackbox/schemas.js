@@ -249,6 +249,10 @@ function normalizeActor(actor) {
     username: actor.username ?? actor.name ?? undefined,
     role: actor.role ?? undefined,
     ip: actor.ip ?? undefined,
+    // Carried through so the grouping engine can link same-session events.
+    // Note the collector strips any key containing "session" before upload, so
+    // in practice this only fills when a source sends it under this exact name.
+    session: actor.session ?? actor.sessionId ?? undefined,
   };
 }
 

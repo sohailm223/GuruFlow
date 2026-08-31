@@ -68,7 +68,12 @@ external provider and no sign-up. Configure the admin through the environment;
 every page and every management API then requires a valid session cookie
 (`scansite_session`, HMAC, 7 days). When no password is configured the
 dashboard fails **closed**: pages redirect to `/login`, APIs return `401`.
-Sessions are not revocable — they expire, or the password changes.
+Sessions are not revocable: `POST /api/blackbox/logout` clears the cookie and
+writes an audit entry, but because the cookie is a stateless HMAC token, a client
+that keeps sending an old value would still verify until it expires. Revoking
+tokens server-side needs a store reachable from the Edge middleware, which is out
+of scope for the single-instance local build — rotating
+`SCANSITE_ADMIN_PASSWORD` invalidates every session immediately.
 
 **2. Collector — per-site key plus a required HMAC signature.** Every collector
 request must carry:
@@ -108,8 +113,13 @@ Administrative actions on this ScanSite instance are appended to
 `data/blackbox/audit.json` (capped at 2 000 entries) and shown under
 **Settings → Management audit log**: admin sign-in and failures, website
 add/delete, disconnect/reconnect, key rotation, incident status changes,
-false-positive verdicts and trusted-file changes. Collector traffic is *not*
-logged here — that volume belongs in the per-site event feed.
+false-positive verdicts and trusted-file changes (including trust entries that
+expired because the hash moved). Collector traffic is *not* logged here — that
+volume belongs in the per-site event feed.
+
+The session key only fires when an event actually carries one: the collector
+strips any metadata key containing `session` before upload, so today it links
+events only if a session identifier arrives under `actor.session`.
 
 ### Trusted files
 
@@ -160,8 +170,8 @@ Deterministic — rules, patterns, event scoring, correlation and confidence. No
 AI service is called.
 
 - **Grouping** — events for one site are clustered by *two* links: silence
-  (10 min gap, 6 h window) **and identity** — actor, IP, account, plugin,
-  theme, cron hook or target shared inside the window. A privilege escalation
+  (10 min gap, 6 h window) **and identity** — actor, IP, session, account,
+  plugin, theme, cron hook or touched file path shared inside the window. A privilege escalation
   and the executable that appeared 45 minutes later land in one incident
   because the same account did both. When events carry no correlation keys the
   time link is the only one that can fire, so behaviour degrades to plain
@@ -214,6 +224,7 @@ without a reason is worthless the next time the same alert fires.
 | Route | Purpose |
 | --- | --- |
 | `POST /api/blackbox/login` | Start an admin session (`429` while locked out) |
+| `POST /api/blackbox/logout` | Clear the session cookie, write an audit entry |
 | `GET`/`POST /api/blackbox/sites` | List websites / register one + pairing code |
 | `GET`/`PATCH`/`DELETE /api/blackbox/sites/[id]` | Detail, rename, delete (`?purge=true`) |
 | `POST /api/blackbox/sites/[id]/disconnect` | Stop accepting events, revoke key |

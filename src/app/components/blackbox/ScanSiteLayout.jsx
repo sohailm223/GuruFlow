@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import clsx from "clsx";
 import {
@@ -16,6 +16,7 @@ import {
   Box,
   CircleCheck,
   CircleDashed,
+  LogOut,
 } from "lucide-react";
 
 const NAV = [
@@ -104,6 +105,8 @@ export default function ScanSiteLayout({ children }) {
               </Link>
             );
           })}
+
+          <SignOutButton />
         </nav>
 
         <CollectorStatus />
@@ -150,5 +153,32 @@ export default function ScanSiteLayout({ children }) {
         })}
       </nav>
     </div>
+  );
+}
+
+/** Ends the local admin session; the action lands in the audit log. */
+function SignOutButton() {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+
+  const signOut = async () => {
+    setBusy(true);
+    try {
+      await fetch("/api/blackbox/logout", { method: "POST" });
+    } finally {
+      router.replace("/login");
+      router.refresh();
+    }
+  };
+
+  return (
+    <button
+      onClick={signOut}
+      disabled={busy}
+      className="mt-2 flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-slate-500 transition hover:bg-slate-900 hover:text-slate-200 disabled:opacity-50"
+    >
+      <LogOut size={17} className="text-slate-500" />
+      <span className="flex-1 text-left">Sign out</span>
+    </button>
   );
 }

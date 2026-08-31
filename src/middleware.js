@@ -19,6 +19,9 @@ const OPEN_API = new Set([
   "/api/blackbox/connect",
   "/api/blackbox/rotate",
   "/api/blackbox/login",
+  // Logout stays open: it only clears a cookie, and it must keep working with
+  // an expired session.
+  "/api/blackbox/logout",
 ]);
 
 export async function middleware(req) {
