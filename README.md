@@ -143,6 +143,14 @@ NEXT_PUBLIC_SCANSITE_BASE_URL=http://localhost:3000
 
 # Optional: override the JSON store location.
 BLACKBOX_DATA_DIR=
+
+# LOCAL DEVELOPMENT ONLY. Verification normally refuses to fetch loopback or
+# private addresses. Setting this to 1 allows those two classes so you can
+# monitor a site running on your own machine. It is never implied by
+# NODE_ENV=development, and it never allows link-local (169.254.0.0/16, which
+# includes the 169.254.169.254 cloud metadata endpoint) or CGNAT (100.64.0.0/10).
+# Leave it unset in production.
+SCANSITE_ALLOW_LOCAL_VERIFY=
 ```
 
 A remote WordPress host usually cannot reach `localhost`. Point the plugin at a
@@ -204,6 +212,50 @@ resolved`
 An incident carries an append-only **notes** log (what you checked, what you
 ruled out) and marking one a false positive **requires a reason** — a verdict
 without a reason is worthless the next time the same alert fires.
+
+### Remediation and verification
+
+An incident also carries a **remediation status**, tracked separately from the
+incident status above: an incident can be `confirmed` while its cleanup is still
+half done.
+
+`not_started · in_progress · partially_resolved · verified`
+
+`POST /api/blackbox/incidents/:id/verify` re-checks what ScanSite can actually
+re-check, and keeps strong evidence separate from weak evidence:
+
+| State | Meaning |
+| --- | --- |
+| `verified_resolved` | strong evidence — an explicit removal event, a clean integrity scan, an HTTP 200 |
+| `likely_resolved` | weaker evidence — absent from a later users snapshot, or a clean aggregate scan |
+| `still_present` | evidence the problem is still there |
+| `not_verified` | no evidence either way |
+| `not_monitored` | ScanSite cannot check this at all; excluded from the totals |
+
+A verification describes a moment. If an event stored **after** it touches the
+same account, file path or cron hook — or a new scan reports critical files
+again — the stored result is flagged **Needs re-check** and a `verified`
+cleanup drops back to `in_progress`.
+
+Every recommendation names the event that caused it (`Reason: account activity
+recorded 6 minutes before a suspicious executable appeared…`, `evt_…`), so the
+reasoning can be checked in the event log rather than taken on trust.
+
+**Outbound requests.** Verification is the only place ScanSite makes one: a
+single GET of a monitored site's own registered origin, to read its HTTP status.
+The endpoint accepts no URL — the body is never read — and every request goes
+through `lib/blackbox/netguard.js`:
+
+- only the registered canonical origin (scheme + host + port; paths stripped)
+- `http`/`https` only — `file:`, `gopher:`, `data:` and friends are rejected
+- link-local (incl. `169.254.169.254`) and CGNAT blocked in every environment
+- loopback and private ranges blocked unless `SCANSITE_ALLOW_LOCAL_VERIFY=1`
+- every DNS answer checked, again inside the socket's own lookup hook, so a
+  rebinding answer cannot slip through
+- redirects validated before following, never into a blocked range
+- 6 s timeout, body never read or returned — only the status code is reported
+
+A blocked check is reported as `not_monitored`, never as a failed website.
 
 ---
 

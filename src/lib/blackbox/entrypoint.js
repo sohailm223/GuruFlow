@@ -14,9 +14,13 @@
  *   - Confidence is derived from the signals below and capped at 90 — an
  *     unverified hypothesis is never presented as certain.
  *
- * ScanSite does not consult a vulnerability database. "Vulnerable plugin" here
- * means *unexpected plugin activity correlates with the incident*, not that a
- * specific CVE was matched.
+ * ScanSite does not consult a vulnerability database, cannot see credentials,
+ * and never executes or matches code against signatures. Labels therefore stay
+ * descriptive of the *activity* observed: "Possible plugin-related entry point"
+ * rather than "Vulnerable Plugin", "Possible application-password misuse"
+ * rather than "Stolen Application Password". A classification means recorded
+ * activity correlates with this incident — nothing about vulnerability,
+ * maliciousness or credential theft is asserted.
  */
 
 import { isExecutablePath, isSuspiciousPath } from "./scoring.js";
@@ -26,10 +30,10 @@ const MINUTE = 60_000;
 /** The classifications ScanSite can produce. */
 export const ENTRY_POINT_TYPES = [
   { id: "compromised_admin", label: "Compromised Admin Account" },
-  { id: "vulnerable_plugin", label: "Vulnerable Plugin" },
-  { id: "vulnerable_theme", label: "Vulnerable Theme" },
-  { id: "stolen_application_password", label: "Stolen Application Password" },
-  { id: "malicious_plugin_install", label: "Malicious Plugin Installation" },
+  { id: "vulnerable_plugin", label: "Possible plugin-related entry point" },
+  { id: "vulnerable_theme", label: "Possible theme-related entry point" },
+  { id: "stolen_application_password", label: "Possible application-password misuse" },
+  { id: "malicious_plugin_install", label: "Suspicious plugin installation" },
   { id: "unexpected_file_upload", label: "Unexpected File Upload" },
   { id: "configuration_hijack", label: "Configuration Hijack" },
   { id: "brute_force_login", label: "Brute-force Login" },
@@ -174,7 +178,7 @@ function componentChanged(events, kind) {
 
   return {
     id: isPlugin ? "vulnerable_plugin" : "vulnerable_theme",
-    label: isPlugin ? "Vulnerable Plugin" : "Vulnerable Theme",
+    label: isPlugin ? "Possible plugin-related entry point" : "Possible theme-related entry point",
     headline: mismatch
       ? `${isPlugin ? "Plugin" : "Theme"} files changed unexpectedly`
       : `Outdated ${isPlugin ? "plugin" : "theme"} may be involved`,
@@ -217,7 +221,7 @@ function applicationPassword(events, knownIps) {
 
   return {
     id: "stolen_application_password",
-    label: "Stolen Application Password",
+    label: "Possible application-password misuse",
     headline: "Application password activity may be involved",
     score,
     reasons,
@@ -258,7 +262,7 @@ function maliciousInstall(events) {
 
   return {
     id: "malicious_plugin_install",
-    label: "Malicious Plugin Installation",
+    label: "Suspicious plugin installation",
     headline: "A newly installed plugin may be involved",
     score,
     reasons,

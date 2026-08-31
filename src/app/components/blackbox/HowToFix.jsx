@@ -53,7 +53,7 @@ export default function HowToFix({ incident, siteId }) {
         <CircleAlert size={14} className="mt-0.5 shrink-0" />
         <span>
           Before you start: create a fresh backup. ScanSite does not change your website — every step below is for you
-          to carry out.
+          to carry out. Each step names the event that caused it, so you can check the reasoning in the event log.
         </span>
       </p>
 
@@ -81,6 +81,7 @@ export default function HowToFix({ incident, siteId }) {
                     <span className={done[it.id] ? "text-slate-400 line-through" : "text-slate-700"}>
                       {it.label}
                       {it.detail ? <span className="block text-xs text-slate-500">{it.detail}</span> : null}
+                      <Evidence evidence={it.evidence} />
                     </span>
                   </label>
                 </li>
@@ -98,6 +99,20 @@ export default function HowToFix({ incident, siteId }) {
         <FixGuideDrawer incident={incident} index={drawerStep} onClose={() => setDrawerStep(null)} />
       )}
     </section>
+  );
+}
+
+/**
+ * The evidence a recommendation is based on: a plain-language reason plus the
+ * event id it came from, so nothing here has to be taken on trust.
+ */
+function Evidence({ evidence, block = false }) {
+  if (!evidence?.reason) return null;
+  return (
+    <span className={`mt-0.5 ${block ? "block text-sm text-slate-600" : "block text-xs text-slate-500"}`}>
+      <span className="font-medium text-slate-600">Reason:</span> {evidence.reason}
+      {evidence.eventId ? <span className="ml-2 font-mono text-[10px] text-slate-400">{evidence.eventId}</span> : null}
+    </span>
   );
 }
 
@@ -201,6 +216,7 @@ function FixGuideDrawer({ incident, index: initial, onClose }) {
         </p>
 
         {step.subject ? <p className="mt-4 break-all font-mono text-sm text-slate-800">{step.subject}</p> : null}
+        <Evidence evidence={step.evidence} block />
         <p className="mt-3 text-sm font-medium text-slate-800">{step.question}</p>
 
         <div className="mt-3 space-y-2">

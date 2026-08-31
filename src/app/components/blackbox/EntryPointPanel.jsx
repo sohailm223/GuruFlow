@@ -35,10 +35,17 @@ export default function EntryPointPanel({ incident }) {
 
       <p className="mt-1 text-xs uppercase tracking-wide text-slate-400">Likely entry point</p>
       <p className="mt-1 text-xl font-semibold text-slate-900">{entry.headline}</p>
-      <p className="mt-1 text-sm text-slate-500">
-        Classification: {entry.label}. ScanSite reports what the recorded events support — it cannot see credentials,
-        passwords or source code, so this is a probable path, not a proven one.
-      </p>
+      {unknown ? (
+        <p className="mt-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+          ScanSite will not guess an infection path when the recorded events do not support one. Nothing in this
+          window identifies how the activity started, so the entry point stays Unknown rather than being filled in.
+        </p>
+      ) : (
+        <p className="mt-1 text-sm text-slate-500">
+          Classification: {entry.label}. ScanSite reports what the recorded events support — it cannot see
+          credentials, passwords or source code, so this is a probable path, not a proven one.
+        </p>
+      )}
 
       {entry.target ? (
         <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm">

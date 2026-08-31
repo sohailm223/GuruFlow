@@ -98,7 +98,11 @@ export default async function IncidentDetailPage({ params }) {
       {/* 4 ── HOW TO FIX IT */}
       <Section n={4} title="How to Fix It" note="ScanSite guides the fix; it never applies it." id="how-to-fix">
         <HowToFix incident={incident} siteId={incident.siteId} />
-        <VerifyRepair incidentId={incident.id} initial={incident.verification ?? null} />
+        <VerifyRepair
+          incidentId={incident.id}
+          initial={incident.verification ?? null}
+          initialStatus={incident.remediationStatus ?? "not_started"}
+        />
       </Section>
 
       {/* 5 ── HOW TO PREVENT IT AGAIN */}

@@ -15,8 +15,10 @@ import {
   getIncidentsBySite,
   saveIncident,
   getIncidentById,
+  updateIncident,
   updateSite,
 } from "./storage";
+import { verificationStaleness } from "./remediation";
 import { recordFileEvidence } from "./files/model";
 
 /**
@@ -91,6 +93,8 @@ export async function ingestEvents(siteId, payload) {
     touchedIds.add(incident.id);
   }
 
+  await flagStaleVerifications(siteId, stored);
+
   return {
     ok: true,
     accepted: stored.length,
@@ -156,13 +160,52 @@ export function publicIncidentSummary(incident) {
  * an operator recorded — investigation notes, a false-positive reason or the
  * last verification run. Anything the analyzer itself produces is regenerated.
  */
-const OPERATOR_FIELDS = ["notes", "statusNote", "falsePositiveReason", "statusUpdatedAt", "verification"];
+const OPERATOR_FIELDS = [
+  "notes",
+  "statusNote",
+  "falsePositiveReason",
+  "statusUpdatedAt",
+  "verification",
+  "remediationStatus",
+];
 
 function carryOperatorFields(prior, incident) {
   if (!prior) return incident;
   const merged = { ...incident };
   for (const k of OPERATOR_FIELDS) if (prior[k] !== undefined) merged[k] = prior[k];
   return merged;
+}
+
+/**
+ * Invalidate verifications that new evidence has overtaken.
+ *
+ * A verification is a statement about a moment. If events stored afterwards
+ * touch the same account, file path or cron hook — or a new scan reports
+ * critical files again — the stored result no longer describes the site, so it
+ * is flagged "needs re-check" instead of continuing to show a stale pass. A
+ * cleanup that was fully verified drops back to in_progress.
+ */
+async function flagStaleVerifications(siteId, newEvents) {
+  if (!newEvents?.length) return;
+
+  const incidents = await getIncidentsBySite(siteId, 50);
+  for (const incident of incidents) {
+    if (!incident.verification?.verifiedAt || incident.verification.stale) continue;
+
+    const verdict = verificationStaleness(incident, newEvents);
+    if (!verdict.stale) continue;
+
+    await updateIncident(incident.id, {
+      verification: {
+        ...incident.verification,
+        stale: true,
+        staleReason: verdict.reason ?? null,
+        staleEventId: verdict.eventId ?? null,
+        staleAt: verdict.at ?? null,
+      },
+      remediationStatus: incident.remediationStatus === "verified" ? "in_progress" : incident.remediationStatus,
+    });
+  }
 }
 
 /**

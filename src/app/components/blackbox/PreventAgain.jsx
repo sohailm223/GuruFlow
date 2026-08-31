@@ -29,7 +29,15 @@ export default function PreventAgain({ incident }) {
             <span className={`mt-0.5 rounded px-2 py-0.5 text-[10px] font-semibold tracking-wide ${LEVEL_STYLE[it.level] ?? LEVEL_STYLE.LOW}`}>
               {it.level}
             </span>
-            <span className="text-sm text-slate-700">{it.text}</span>
+            <span className="min-w-0 flex-1 text-sm text-slate-700">
+              {it.text}
+              {it.evidence?.reason ? (
+                <span className="mt-0.5 block text-xs text-slate-500">
+                  <span className="font-medium text-slate-600">Because:</span> {it.evidence.reason}
+                  {it.evidence.eventId ? <span className="ml-2 font-mono text-[10px] text-slate-400">{it.evidence.eventId}</span> : null}
+                </span>
+              ) : null}
+            </span>
           </li>
         ))}
       </ul>
